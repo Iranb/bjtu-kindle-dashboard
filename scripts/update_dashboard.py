@@ -407,7 +407,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--deploy",
         metavar="SSH_HOST",
-        help="copy the output to a Kindle and refresh it, e.g. kindle-pw3",
+        help="copy the output to a Kindle and refresh it, e.g. kindle",
     )
     parser.add_argument("--remote-image", default=DEFAULT_REMOTE_IMAGE)
     parser.add_argument("--remote-render", default=DEFAULT_REMOTE_RENDER)

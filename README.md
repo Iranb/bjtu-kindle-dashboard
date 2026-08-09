@@ -52,12 +52,12 @@ python scripts/update_dashboard.py data/dashboard.json \
 
 ## Deploy to Kindle
 
-With an SSH alias such as `kindle-pw3` already configured:
+With an SSH alias such as `kindle` already configured:
 
 ```bash
 python scripts/update_dashboard.py data/dashboard.json \
   --output panel-base.png \
-  --deploy kindle-pw3
+  --deploy kindle
 ```
 
 The default deployment target is:
@@ -68,6 +68,14 @@ The default deployment target is:
 
 The command then runs the installed native screen hook's `render-panel.sh`.
 Override either path with `--remote-image` and `--remote-render`.
+
+## Documentation
+
+- [Native sleep hook design (简体中文)](docs/native-sleep-hook.zh-CN.md)
+- [Connecting to Kindle from Windows (简体中文)](docs/connect-kindle.zh-CN.md)
+
+Both guides use placeholders for network addresses, local usernames and key
+paths. They do not contain credentials or device identifiers.
 
 ## Data layout
 
