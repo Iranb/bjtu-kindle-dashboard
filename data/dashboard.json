@@ -1,0 +1,33 @@
+{
+  "cluster": {
+    "name": "BJTU COMPUTE",
+    "subtitle": "CLUSTER MONITOR"
+  },
+  "header": {
+    "time": "14:30",
+    "date": "SUN . AUG 9",
+    "battery": 99
+  },
+  "capacity": {
+    "gpus_free": 12,
+    "gpus_total": 32,
+    "cpu_cores_free": 108,
+    "jobs_running": 3,
+    "jobs_queued": 1,
+    "all_systems_online": true
+  },
+  "nodes": [
+    {"name": "NODE 03", "state": "READY", "free": 8, "total": 8},
+    {"name": "NODE 04", "state": "MIXED", "free": 4, "total": 8},
+    {"name": "NODE 01", "state": "FULL", "free": 0, "total": 8},
+    {"name": "NODE 02", "state": "FULL", "free": 0, "total": 8}
+  ],
+  "accounts": [
+    {"name": "ACCOUNT A", "status": "HEALTHY", "running": 1, "queued": 0},
+    {"name": "ACCOUNT B", "status": "WAITING", "running": 1, "queued": 1},
+    {"name": "ACCOUNT C", "status": "SIGN-IN", "running": 0, "queued": 0},
+    {"name": "ACCOUNT D", "status": "HEALTHY", "running": 1, "queued": 0},
+    {"name": "ACCOUNT E", "status": "HEALTHY", "running": 0, "queued": 0},
+    {"name": "ACCOUNT F", "status": "HEALTHY", "running": 0, "queued": 0}
+  ]
+}
