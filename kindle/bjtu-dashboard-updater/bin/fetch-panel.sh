@@ -80,6 +80,7 @@ if [ -n "$ETAG" ]; then
         --connect-timeout "$WIFI_CONNECT_TIMEOUT_SECONDS" \
         --max-time "$DOWNLOAD_TIMEOUT_SECONDS" \
         --fail --silent --show-error \
+        --header "Accept: application/vnd.github.raw+json" \
         --header "If-None-Match: $ETAG" \
         --dump-header "$HEADERS" \
         --output "$INCOMING" \
@@ -93,6 +94,7 @@ else
         --connect-timeout "$WIFI_CONNECT_TIMEOUT_SECONDS" \
         --max-time "$DOWNLOAD_TIMEOUT_SECONDS" \
         --fail --silent --show-error \
+        --header "Accept: application/vnd.github.raw+json" \
         --dump-header "$HEADERS" \
         --output "$INCOMING" \
         --write-out '%{http_code}' \
@@ -119,7 +121,10 @@ is_uint "$SIZE" || fail "size_invalid"
 [ "$SIZE" -gt 0 ] && [ "$SIZE" -le "$MAX_IMAGE_BYTES" ] || fail "size_out_of_range"
 
 CONTENT_TYPE=$(grep -i '^Content-Type:' "$HEADERS" 2>/dev/null | tail -n 1 | cut -d: -f2- | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[;[:space:]].*$//')
-[ "$CONTENT_TYPE" = "image/png" ] || fail "content_type"
+case "$CONTENT_TYPE" in
+    image/png|application/vnd.github.raw+json) ;;
+    *) fail "content_type" ;;
+esac
 validate_png "$INCOMING" || fail "png_validation"
 
 NEW_HASH=$(sha256sum "$INCOMING" 2>/dev/null | awk '{print $1}')

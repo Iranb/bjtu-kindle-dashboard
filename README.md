@@ -79,9 +79,11 @@ hook above. Deploy it through an existing Kindle SSH alias:
 python scripts/deploy_kindle_updater.py kindle
 ```
 
-Its default public source is `assets/panel-base.png` from this repository. For
-a private endpoint, keep the URL in the USB-visible `update.conf`, and place
-the authorization header only in the Kindle's root-owned
+Its default public source is `assets/panel-base.png` from this repository,
+fetched through GitHub's raw Contents API. This endpoint proved reachable from
+the target Kindle network and has a short cache lifetime. For a private
+endpoint, keep the URL in the USB-visible `update.conf`, and place the
+authorization header only in the Kindle's root-owned
 `/var/local/bjtu-dashboard/curl.conf`.
 
 Useful device-side commands:

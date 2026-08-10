@@ -49,12 +49,15 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn("FETCH_LOCK_DIR", common)
         self.assertIn('mkdir "$FETCH_LOCK_DIR"', fetcher)
         self.assertIn("validate_png", fetcher)
+        self.assertIn("application/vnd.github.raw+json", fetcher)
         self.assertIn("sha256sum", fetcher)
         self.assertIn('mv -f "$INCOMING" "$ASSET"', fetcher)
 
     def test_public_config_contains_no_credentials(self) -> None:
         config = (UPDATER / "update.conf.example").read_text("utf-8").lower()
         self.assertIn("https://", config)
+        self.assertIn("api.github.com", config)
+        self.assertIn("?ref=main", config)
         self.assertNotIn("authorization:", config)
         self.assertNotIn("bearer ", config)
 
