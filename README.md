@@ -16,6 +16,7 @@ a jailbroken Kindle over SSH.
   date and battery rendering.
 - Can deploy and refresh the image through an existing SSH alias.
 - Includes an optional resident Kindle service for low-frequency RTC updates.
+- Can turn the local BJTU HPC Widget snapshot into an anonymized live lock screen.
 
 ## Install
 
@@ -106,6 +107,7 @@ network window with `abortSuspend`, and then allows normal suspend to resume.
 - [Connecting to Kindle from Windows (简体中文)](docs/connect-kindle.zh-CN.md)
 - [Scheduled updates while suspended (简体中文)](docs/scheduled-sleep-updates.zh-CN.md)
 - [RTC wake and background Wi-Fi validation (简体中文)](docs/rtc-wifi-validation.zh-CN.md)
+- [Local HPC Widget to Kindle sync (简体中文)](docs/hpc-widget-sync.zh-CN.md)
 
 All guides use placeholders for network addresses, local usernames and key
 paths. They do not contain credentials or device identifiers.
