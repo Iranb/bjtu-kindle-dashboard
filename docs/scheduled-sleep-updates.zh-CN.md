@@ -7,6 +7,11 @@
 > 当前状态：本文是下一阶段的实现规格。仓库中的图片渲染器和已部署的原生
 > 休眠钩子可以作为基础，但当前钩子尚未包含周期唤醒和网络下载逻辑。
 
+> 2026-08-10 已在 Kindle Paperwhite 3、固件 5.16.2.1.1 上完成一次 RTC
+> 唤醒和后台 Wi-Fi 验证。实测结论及失败路径见
+> [RTC 唤醒与后台 Wi-Fi 实测记录](rtc-wifi-validation.zh-CN.md)。本文已按该结果
+> 修正 RTC 写入时机和联网窗口流程。
+
 文中的域名、设备标识、令牌和地址均为占位符，不对应真实设备。
 
 ## 1. 目标
@@ -240,7 +245,7 @@ outOfScreenSaver
 | 事件 | 动作 |
 | --- | --- |
 | `goingToScreenSaver` | 显示最后成功的面板，保持 shield，标记 `SCREEN_SAVER` |
-| `readyToSuspend` | 根据电量和失败退避计算下一次间隔，设置一次 `rtcWakeup` |
+| `readyToSuspend` | 观察倒计时等级；只在本轮最后一级 `1` 后设置 `rtcWakeup` |
 | `wakeupFromSuspend` | 判断是否到达计划更新时间；满足条件时进入 `RTC_WINDOW` |
 | `outOfScreenSaver` | 标记 `USER_WAKE`，终止后台窗口并执行正常原生界面重绘 |
 
@@ -260,11 +265,17 @@ goingToScreenSaver
 
 ### 8.2 安排下一次唤醒
 
-只有收到 `readyToSuspend` 后才调用：
+目标固件会依次发出多个 `readyToSuspend` 等级，系统客户端会在这些事件中继续
+登记自己的 RTC 闹钟。实测序列包含 `10、8、7、7、6、2、1`。本项目必须等到
+最后一级 `1`，并让同级系统监听器先完成后，再调用：
 
 ```sh
 lipc-set-prop -i com.lab126.powerd rtcWakeup "$SECONDS_FROM_NOW"
 ```
+
+如果在等级 `10` 时过早设置，即使命令返回成功，也可能被后续 `phd` 请求覆盖。
+安装阶段必须从 powerd 日志确认真正挂起时的硬件 RTC 值，而不能只检查 LIPC
+命令返回码。
 
 调度规则：
 
@@ -277,17 +288,16 @@ lipc-set-prop -i com.lab126.powerd rtcWakeup "$SECONDS_FROM_NOW"
 
 ### 8.3 RTC 冲突
 
-硬件通常只有一个有效 RTC 唤醒时间，Amazon 服务或其他扩展也可能使用它。实现
-不能无条件覆盖 `/sys/class/rtc/rtc0/wakealarm`：
+硬件通常只有一个有效 RTC 唤醒时间，Amazon 服务或其他扩展也可能使用它。实测
+表明 powerd 会接收多个客户端的请求，但同一轮后续写入仍可能改变最终选择。
 
-1. 在设置前读取现有非零唤醒 epoch；
-2. 如果现有时间早于本项目目标时间，保留现有时间；
-3. 如果本项目时间更早，记录被替换的 epoch；
-4. 本项目唤醒并完成更新后，在下一次 `readyToSuspend` 时优先恢复更早的原闹钟；
-5. 检测到无法安全判定的第三方 RTC 所有者时，禁用周期更新并记录原因。
+实现必须通过 powerd 的 LIPC 接口参与调度，不能直接覆盖
+`/sys/class/rtc/rtc0/wakealarm`。每一轮都要记录本项目目标 epoch，并在真正挂起后
+通过日志或能力探针确认固件采用了预期值。RTC 唤醒后，系统客户端会在下一轮
+`readyToSuspend` 重新登记自己的计划。
 
-第一版必须以“能力探测通过且没有冲突”为启用条件。不能为了仪表盘更新破坏系统
-维护、时间同步或其他扩展的唤醒计划。
+如果检测到更早的系统闹钟、未知第三方所有者，或无法确认最终硬件时间，第一版
+应跳过本项目计划并记录原因。不能为了仪表盘更新破坏系统维护或其他扩展。
 
 ### 8.4 判断计划唤醒与用户唤醒
 
@@ -304,40 +314,34 @@ lipc-set-prop -i com.lab126.powerd rtcWakeup "$SECONDS_FROM_NOW"
 ## 9. 联网窗口
 
 `network-window.sh` 的最大生命周期为 30 秒，并由独立 watchdog 强制终止。
+计时从 Wi-Fi 恢复事件开始，不包含 RTC 唤醒后等待下一轮 `readyToSuspend` 的约
+60 秒固件延迟。
 
 推荐流程：
 
 ```text
 进入 RTC_WINDOW
-  → 暂缓本轮重新挂起
-  → 记录 Wi-Fi 原状态
-  → 启用 Wi-Fi
+  → 等待唤醒后的下一条 readyToSuspend
+  → 调用 abortSuspend，回到 screenSaver
   → 最多等待 12 秒连接
   → 调用 fetch-panel.sh
-  → 恢复 Wi-Fi 原状态
   → 清理锁和临时文件
-  → 让 powerd 重新挂起
+  → 不发送 powerButton，让 powerd 自然重新挂起
 ```
 
-Wi-Fi 控制和连接状态可以通过固件支持的 LIPC 属性完成：
+目标固件的实测控制方式是：
 
 ```sh
-lipc-set-prop -i com.lab126.wifid enable 1
+lipc-set-prop -i com.lab126.powerd abortSuspend 1
 lipc-get-prop com.lab126.wifid cmState
 ```
 
-目标固件可能使用不同状态值，安装阶段必须确认 `CONNECTED` 判断有效。
+`deferSuspend` 只能延长 `readyToSuspend`，不会恢复已经随 suspend 停止的无线
+硬件；重复设置 `wifid enable=1` 也会被当作冗余操作。`abortSuspend` 会让 powerd
+回到 `screenSaver` 并广播正常恢复事件，实测 Wi-Fi 在 1 秒内连接。
 
-短暂延后挂起可以使用固件支持的 `deferSuspend` 或等效接口，但它必须满足：
-
-- 只在 RTC 联网窗口设置；
-- 最大值固定为 30 秒；
-- watchdog 超时后一定恢复；
-- KUAL 停用和服务退出时一定清除；
-- 不使用无限循环续期。
-
-如果目标固件不支持可靠的限时延后挂起，周期更新必须保持关闭，不能回退为永久
-阻止休眠。
+其他固件可能有不同状态值或行为，安装阶段必须重新确认 `abortSuspend` 不退出
+屏保、`CONNECTED` 判断有效，并确认网络窗口结束后设备能自然重新挂起。
 
 后台任务不得模拟电源键。模拟电源键会退出休眠画面、唤醒原生 UI，并使自动
 重新挂起流程变得不可预测。
@@ -509,7 +513,8 @@ next_wakeup_seconds=3600
 - 确认 `readyToSuspend` 与 `wakeupFromSuspend` 事件存在；
 - 确认一次性 `rtcWakeup` 可以唤醒设备；
 - 确认 RTC 唤醒不会自动退出休眠面板；
-- 确认限时 `deferSuspend` 或等效接口有效；
+- 确认最后一级 `readyToSuspend=1` 后写入的 RTC 值未被覆盖；
+- 确认 `abortSuspend` 保持屏保并触发无线恢复；
 - 确认 Wi-Fi 可在后台窗口内连接；
 - 确认窗口结束后设备能重新挂起；
 - 记录固件版本，但不把序列号写入测试日志。
@@ -525,9 +530,11 @@ next_wakeup_seconds=3600
 
 ### 阶段 2：一次性 RTC 测试
 
-- 将闹钟设置为两分钟后；
+- 将闹钟设置为至少三分钟后；
 - 手动进入休眠；
-- 确认 RTC 唤醒、联网、拉取和重新挂起；
+- 在最后一级 `readyToSuspend=1` 后设置 RTC；
+- RTC 唤醒后等待下一轮 `readyToSuspend`，再调用 `abortSuspend`；
+- 确认 RTC 唤醒、联网、拉取和自然重新挂起；
 - 确认全过程没有触发 `powerButton` 或显示原生主页；
 - 确认更新后仍显示 shield 和新面板。
 
@@ -557,6 +564,8 @@ next_wakeup_seconds=3600
 | 电量低于阈值 | 不安排本项目 RTC 更新 |
 | 正在充电 | 使用充电间隔，但仍限制 30 秒窗口 |
 | 用户在更新中唤醒 | 立即让用户流程接管，不再次自动锁屏 |
+| RTC 在等级 10 时过早写入 | 后续系统请求可覆盖；测试必须判定失败 |
+| USB 线仍连接 | 不进入深度休眠测试，提示断开 USB 后重试 |
 | 服务在下载中终止 | trap 清理，旧图完整，设备可以挂起 |
 | 重启设备 | 默认使用旧图，读取启用标记后重新初始化 |
 | 已存在更早 RTC | 不覆盖，记录并等待更早唤醒 |

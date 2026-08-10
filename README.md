@@ -74,6 +74,7 @@ Override either path with `--remote-image` and `--remote-render`.
 - [Native sleep hook design (简体中文)](docs/native-sleep-hook.zh-CN.md)
 - [Connecting to Kindle from Windows (简体中文)](docs/connect-kindle.zh-CN.md)
 - [Scheduled updates while suspended (简体中文)](docs/scheduled-sleep-updates.zh-CN.md)
+- [RTC wake and background Wi-Fi validation (简体中文)](docs/rtc-wifi-validation.zh-CN.md)
 
 All guides use placeholders for network addresses, local usernames and key
 paths. They do not contain credentials or device identifiers.
