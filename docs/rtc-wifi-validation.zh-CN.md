@@ -276,3 +276,25 @@ lipc-get-prop com.lab126.wifid cmState
 本轮没有 `powerButton` 调用；从 RTC 恢复到更新结束期间始终是屏保状态。更新后设备
 自然重新进入深度休眠，随后用户解锁才记录为外部唤醒。长周期稳定性和上述待验证
 边界仍不能由单次闭环外推。
+
+## 后续周期与插电观察
+
+同日后续日志又记录到 6 轮连续的计划 RTC 唤醒和成功条件请求。各轮均先由 RTC
+恢复，随后 `abortSuspend`，Wi-Fi 从 `NA` 恢复为 `CONNECTED`，Contents/边缘
+HTTPS 返回 `304`，最后自然再次挂起。这比最初的单轮闭环更强，但仍未达到连续
+20 轮和 48 小时验收标准。另有一轮在 12 秒 Wi-Fi 旧超时下失败且旧图保留；部署
+配置已把连接等待提高到 45 秒。
+
+用户随后报告设备曾“睡眠一段时间”。检查时设备处于 `screenSaver`、外部供电有效、
+Wi-Fi 为 `CONNECTED`，该时段没有新的 `wakeupFromSuspend` 或计划唤醒记录，因此
+不能归类为 RTC 深度休眠；它是锁屏但系统仍醒着的状态。这一观察也是插电常在线
+模式的目标外观，但不能作为深睡 Wi-Fi 保持连接的证据。
+
+现已部署充电专用的短周期保持策略：锁屏且充电时每 30 秒续期 120 秒
+`suspendGrace`，每 5 分钟执行 ETag 条件请求；解锁立即释放，拔线最多 30 秒释放，
+守护进程退出后 grace 最迟 120 秒自然失效。实机锁屏后确认 powerd 持续报告
+`screenSaver` 和 `suspend_grace:120`，Wi-Fi 保持 `CONNECTED`，并连续完成两次
+5 分钟 HTTPS/ETag `304`；图片哈希不变且没有渲染。用户解锁后，同一秒记录
+`outOfScreenSaver` 和 `keep_awake result=released`，powerd 的 `suspend_grace`、
+`defer_suspend` 均为 0，解锁取消路径通过。断电时继续走已验证的 RTC 深睡路径。
+尚需实测拔线回退和 12–24 小时稳定性。

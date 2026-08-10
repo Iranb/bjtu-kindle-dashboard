@@ -9,14 +9,27 @@ fi
 READY_PID=""
 WAKE_PID=""
 OUT_PID=""
+TICK_PID=""
 WINDOW_PENDING=0
 RTC_ARMED=0
+KEEP_AWAKE_HELD=0
+
+release_keep_awake() {
+    if [ "$KEEP_AWAKE_HELD" -eq 1 ]; then
+        lipc-set-prop -i com.lab126.powerd suspendGrace 0 >/dev/null 2>&1 || true
+        lipc-set-prop -i com.lab126.powerd deferSuspend 0 >/dev/null 2>&1 || true
+        KEEP_AWAKE_HELD=0
+        log "keep_awake result=released"
+    fi
+}
 
 cleanup() {
     trap - INT TERM EXIT
     [ -n "$READY_PID" ] && kill "$READY_PID" >/dev/null 2>&1 || true
     [ -n "$WAKE_PID" ] && kill "$WAKE_PID" >/dev/null 2>&1 || true
     [ -n "$OUT_PID" ] && kill "$OUT_PID" >/dev/null 2>&1 || true
+    [ -n "$TICK_PID" ] && kill "$TICK_PID" >/dev/null 2>&1 || true
+    release_keep_awake
     exec 3>&- 2>/dev/null || true
     exec 3<&- 2>/dev/null || true
     rm -f "$FIFO" "$PID_FILE"
@@ -76,6 +89,52 @@ record_failure() {
     esac
     set_next_due_after "$BACKOFF"
     log "schedule result=failure count=$COUNT next_in=$BACKOFF"
+}
+
+should_keep_awake() {
+    [ "$CHARGING_KEEP_AWAKE" = "1" ] && is_charging && [ "$(power_state)" = "screenSaver" ]
+}
+
+renew_keep_awake() {
+    should_keep_awake || return 1
+    if ! lipc-set-prop -i com.lab126.powerd suspendGrace "$KEEP_AWAKE_GRACE_SECONDS" >/dev/null 2>&1; then
+        log "keep_awake result=fail step=suspend_grace"
+        return 1
+    fi
+    # Some firmware applies deferSuspend only in readyToSuspend. The confirmed
+    # hold here is suspendGrace; deferSuspend is a harmless second guard.
+    lipc-set-prop -i com.lab126.powerd deferSuspend "$KEEP_AWAKE_GRACE_SECONDS" >/dev/null 2>&1 || true
+    if [ "$KEEP_AWAKE_HELD" -eq 0 ]; then
+        log "keep_awake result=held grace=$KEEP_AWAKE_GRACE_SECONDS renew=$KEEP_AWAKE_RENEW_SECONDS"
+    fi
+    KEEP_AWAKE_HELD=1
+    return 0
+}
+
+run_charging_window_if_due() {
+    should_keep_awake || return 0
+    DUE=$(ensure_next_due)
+    NOW=$(now_epoch)
+    [ "$NOW" -ge "$DUE" ] || return 0
+
+    if "$EXT_DIR/bin/network-window.sh"; then
+        record_success
+    else
+        WINDOW_RC=$?
+        if [ "$WINDOW_RC" -eq 20 ]; then
+            record_cancelled
+        else
+            record_failure
+        fi
+    fi
+}
+
+handle_keep_awake_tick() {
+    if renew_keep_awake; then
+        run_charging_window_if_due
+    else
+        release_keep_awake
+    fi
 }
 
 schedule_rtc() {
@@ -201,6 +260,15 @@ WAKE_PID=$!
 lipc-wait-event -m com.lab126.powerd outOfScreenSaver >&3 2>/dev/null &
 OUT_PID=$!
 
+(
+    while sleep "$KEEP_AWAKE_RENEW_SECONDS"; do
+        printf '%s\n' keepAwakeTick > "$FIFO" || exit 0
+    done
+) &
+TICK_PID=$!
+
+handle_keep_awake_tick
+
 while read -r EVENT_LINE <&3; do
     case "$EVENT_LINE" in
         *wakeupFromSuspend*)
@@ -208,7 +276,11 @@ while read -r EVENT_LINE <&3; do
             ;;
         *outOfScreenSaver*)
             WINDOW_PENDING=0
+            release_keep_awake
             log "wake result=out_of_screensaver"
+            ;;
+        *keepAwakeTick*)
+            handle_keep_awake_tick
             ;;
         *readyToSuspend*)
             LEVEL=$(printf '%s\n' "$EVENT_LINE" | awk '{print $NF}')
@@ -219,7 +291,11 @@ while read -r EVENT_LINE <&3; do
                     fi
                     ;;
                 1)
-                    if [ "$WINDOW_PENDING" -eq 0 ]; then
+                    if [ "$WINDOW_PENDING" -eq 0 ] && renew_keep_awake; then
+                        RTC_ARMED=0
+                        rm -f "$SCHEDULED_EPOCH_FILE"
+                        run_charging_window_if_due
+                    elif [ "$WINDOW_PENDING" -eq 0 ]; then
                         schedule_rtc
                     fi
                     ;;

@@ -50,14 +50,17 @@ config_uint_in_range() {
 load_config() {
     UPDATE_URL=""
     BATTERY_INTERVAL_SECONDS=3600
-    CHARGING_INTERVAL_SECONDS=600
+    CHARGING_INTERVAL_SECONDS=300
+    CHARGING_KEEP_AWAKE=1
+    KEEP_AWAKE_GRACE_SECONDS=120
+    KEEP_AWAKE_RENEW_SECONDS=30
     LOW_BATTERY_PERCENT=20
     MIN_RTC_SECONDS=180
     RTC_FINAL_DELAY_SECONDS=2
     WAKE_EARLY_TOLERANCE_SECONDS=60
-    WIFI_CONNECT_TIMEOUT_SECONDS=12
-    DOWNLOAD_TIMEOUT_SECONDS=12
-    NETWORK_WINDOW_TIMEOUT_SECONDS=30
+    WIFI_CONNECT_TIMEOUT_SECONDS=45
+    DOWNLOAD_TIMEOUT_SECONDS=30
+    NETWORK_WINDOW_TIMEOUT_SECONDS=60
     MAX_IMAGE_BYTES=2097152
     FAILURE_BACKOFF_1_SECONDS=3600
     FAILURE_BACKOFF_2_SECONDS=7200
@@ -152,6 +155,27 @@ load_config() {
                 }
                 CHARGING_INTERVAL_SECONDS=$CONFIG_VALUE
                 ;;
+            CHARGING_KEEP_AWAKE)
+                config_uint_in_range "$CONFIG_VALUE" 0 1 || {
+                    config_error "$CONFIG_LINE_NUMBER" "CHARGING_KEEP_AWAKE must be 0 or 1"
+                    return 1
+                }
+                CHARGING_KEEP_AWAKE=$CONFIG_VALUE
+                ;;
+            KEEP_AWAKE_GRACE_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 60 3600 || {
+                    config_error "$CONFIG_LINE_NUMBER" "KEEP_AWAKE_GRACE_SECONDS must be 60..3600"
+                    return 1
+                }
+                KEEP_AWAKE_GRACE_SECONDS=$CONFIG_VALUE
+                ;;
+            KEEP_AWAKE_RENEW_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 10 600 || {
+                    config_error "$CONFIG_LINE_NUMBER" "KEEP_AWAKE_RENEW_SECONDS must be 10..600"
+                    return 1
+                }
+                KEEP_AWAKE_RENEW_SECONDS=$CONFIG_VALUE
+                ;;
             LOW_BATTERY_PERCENT)
                 config_uint_in_range "$CONFIG_VALUE" 0 100 || {
                     config_error "$CONFIG_LINE_NUMBER" "LOW_BATTERY_PERCENT must be 0..100"
@@ -233,6 +257,12 @@ load_config() {
                 ;;
         esac
     done < "$CONFIG_FILE"
+
+    if [ "$KEEP_AWAKE_RENEW_SECONDS" -ge "$KEEP_AWAKE_GRACE_SECONDS" ]; then
+        config_error "$CONFIG_LINE_NUMBER" "KEEP_AWAKE_RENEW_SECONDS must be less than KEEP_AWAKE_GRACE_SECONDS"
+        return 1
+    fi
+    return 0
 }
 
 rotate_log() {

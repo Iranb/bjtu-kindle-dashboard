@@ -1,4 +1,6 @@
 import importlib.util
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 import tempfile
 import unittest
@@ -25,6 +27,8 @@ class MacOSSyncInstallerTests(unittest.TestCase):
                 runtime_dir=root,
                 snapshot=snapshot,
                 remote="https://github.com/example/repo.git",
+                ssh_target="",
+                ssh_path="safe/panel.png",
                 branch="kindle-live",
                 interval=300,
             )
@@ -46,10 +50,38 @@ class MacOSSyncInstallerTests(unittest.TestCase):
                 runtime_dir=root,
                 snapshot=root / "snapshot.json",
                 remote="",
+                ssh_target="",
+                ssh_path="safe/panel.png",
                 branch="kindle-live",
                 interval=300,
             )
             self.assertNotIn("--remote", plist["ProgramArguments"])
+
+    def test_ssh_edge_plist_contains_no_password_or_git_remote(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plist = MODULE.build_plist(
+                home=root,
+                python=root / "python3",
+                app_dir=root / "app",
+                runtime_dir=root,
+                snapshot=root / "snapshot.json",
+                remote="",
+                ssh_target="kindle-edge",
+                ssh_path="safe/panel.png",
+                branch="kindle-live",
+                interval=300,
+            )
+            arguments = plist["ProgramArguments"]
+            self.assertIn("--ssh-target", arguments)
+            self.assertNotIn("--remote", arguments)
+            self.assertNotIn("password", str(plist).lower())
+
+    def test_installer_rejects_unsafe_ssh_destination(self) -> None:
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+            MODULE.parse_args(
+                ["--print-plist", "--ssh-target", "user@host"]
+            )
 
 
 if __name__ == "__main__":

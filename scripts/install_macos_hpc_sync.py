@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from publish_kindle_live import PublishError, validate_branch, validate_remote
+from publish_kindle_ssh import validate_remote_path, validate_target
 from sync_hpc_widget import DEFAULT_SNAPSHOT
 
 
@@ -26,6 +27,7 @@ RUNTIME_SCRIPTS = (
     "update_dashboard.py",
     "sync_hpc_widget.py",
     "publish_kindle_live.py",
+    "publish_kindle_ssh.py",
     "run_hpc_kindle_sync.py",
 )
 
@@ -42,6 +44,8 @@ def build_plist(
     runtime_dir: Path,
     snapshot: Path,
     remote: str,
+    ssh_target: str,
+    ssh_path: str,
     branch: str,
     interval: int,
 ) -> dict[str, Any]:
@@ -63,6 +67,8 @@ def build_plist(
     ]
     if remote:
         arguments.extend(["--remote", remote])
+    elif ssh_target:
+        arguments.extend(["--ssh-target", ssh_target, "--ssh-path", ssh_path])
     return {
         "Label": LABEL,
         "ProgramArguments": arguments,
@@ -113,6 +119,8 @@ def plist_for_args(args: argparse.Namespace, python: Path, app_dir: Path) -> dic
         runtime_dir=args.runtime_dir,
         snapshot=args.snapshot,
         remote=args.remote,
+        ssh_target=args.ssh_target,
+        ssh_path=args.ssh_path,
         branch=args.branch,
         interval=args.interval,
     )
@@ -174,10 +182,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime-dir", type=Path, default=DEFAULT_RUNTIME)
     parser.add_argument("--plist", type=Path, default=DEFAULT_PLIST)
     parser.add_argument("--snapshot", type=Path, default=DEFAULT_SNAPSHOT)
-    parser.add_argument(
+    destination = parser.add_mutually_exclusive_group()
+    destination.add_argument(
         "--remote",
         default="",
         help="credential-free Git remote; omit for local rendering only",
+    )
+    destination.add_argument(
+        "--ssh-target",
+        default="",
+        help="credential-free SSH Host alias for a private HTTPS edge",
+    )
+    parser.add_argument(
+        "--ssh-path",
+        default=".local/share/bjtu-kindle-edge/www/panel-base.png",
     )
     parser.add_argument("--branch", default="kindle-live")
     parser.add_argument("--interval", type=int, default=300)
@@ -196,6 +214,9 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         validate_branch(args.branch)
         if args.remote:
             validate_remote(args.remote)
+        if args.ssh_target:
+            validate_target(args.ssh_target)
+            validate_remote_path(args.ssh_path)
     except PublishError as exc:
         parser.error(str(exc))
     return args

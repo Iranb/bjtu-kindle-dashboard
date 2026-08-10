@@ -58,29 +58,6 @@ case "$ACTION" in
     fetch-now)
         BJTU_ALLOW_ACTIVE=1 BJTU_NO_RENDER=1 "$EXT_DIR/bin/fetch-panel.sh"
         ;;
-    test)
-        SECONDS="${2:-180}"
-        is_uint "$SECONDS" && [ "$SECONDS" -ge "$MIN_RTC_SECONDS" ] || {
-            echo "test interval must be at least $MIN_RTC_SECONDS seconds" >&2
-            exit 2
-        }
-        [ -n "$UPDATE_URL" ] || {
-            echo "UPDATE_URL is empty; edit $CONFIG_FILE first" >&2
-            exit 1
-        }
-        mkdir -p "$STATE_DIR"
-        chmod 700 "$STATE_DIR" >/dev/null 2>&1 || true
-        touch "$ENABLED_FILE" "$STATE_DIR/test-once"
-        write_state "$NEXT_DUE_FILE" "$(( $(now_epoch) + SECONDS ))"
-        start_service
-        echo "test scheduled in $SECONDS seconds"
-        if [ "$(power_state)" = "active" ]; then
-            (
-                sleep 2
-                lipc-set-prop -i com.lab126.powerd powerButton 1 >/dev/null 2>&1
-            ) &
-        fi
-        ;;
     logs)
         tail -n "${2:-80}" "$LOG_FILE" 2>/dev/null
         ;;
@@ -88,7 +65,7 @@ case "$ACTION" in
         exec /bin/sh "$EXT_DIR/install.sh" uninstall
         ;;
     *)
-        echo "usage: $0 {enable|disable|restart|status|fetch-now|test [seconds]|logs [lines]|uninstall}" >&2
+        echo "usage: $0 {enable|disable|restart|status|fetch-now|logs [lines]|uninstall}" >&2
         exit 2
         ;;
 esac

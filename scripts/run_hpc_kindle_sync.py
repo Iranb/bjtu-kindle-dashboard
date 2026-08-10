@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from publish_kindle_live import PublishError, publish
+from publish_kindle_ssh import (
+    DEFAULT_REMOTE_PATH,
+    publish_ssh,
+    validate_remote_path,
+    validate_target,
+)
 from sync_hpc_widget import (
     DEFAULT_ACCOUNT_LABELS,
     DEFAULT_SNAPSHOT,
@@ -61,40 +67,63 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "image_sha256": render_receipt["image_sha256"],
             "stale": render_receipt["stale"],
         }
-        if not args.remote:
+        if not args.remote and not args.ssh_target:
             receipt["publish"] = "disabled"
             return receipt
 
         publish_state_path = runtime / "state" / "publish.json"
         publish_state = load_optional_json(publish_state_path)
-        if (
-            publish_state.get("image_sha256") == render_receipt["image_sha256"]
-            and publish_state.get("branch") == args.branch
-            and publish_state.get("remote") == args.remote
-        ):
+        if args.ssh_target:
+            destination_matches = bool(
+                publish_state.get("kind") == "ssh"
+                and publish_state.get("target") == args.ssh_target
+                and publish_state.get("remote_path") == args.ssh_path
+            )
+        else:
+            destination_matches = bool(
+                publish_state.get("kind") == "git"
+                and publish_state.get("branch") == args.branch
+                and publish_state.get("remote") == args.remote
+            )
+        if publish_state.get("image_sha256") == render_receipt["image_sha256"] and destination_matches:
             receipt["publish"] = "unchanged"
             return receipt
 
-        publish_receipt = publish(
-            image=output,
-            worktree=runtime / "publisher",
-            remote=args.remote,
-            branch=args.branch,
-            max_bytes=args.max_image_bytes,
-        )
-        # Persist success only after the remote push or remote equality check.
-        atomic_write_json(
-            publish_state_path,
-            {
+        if args.ssh_target:
+            publish_receipt = publish_ssh(
+                image=output,
+                target=args.ssh_target,
+                remote_path=args.ssh_path,
+                max_bytes=args.max_image_bytes,
+            )
+            published_state = {
                 "version": 1,
+                "kind": "ssh",
+                "target": args.ssh_target,
+                "remote_path": args.ssh_path,
+                "image_sha256": render_receipt["image_sha256"],
+            }
+        else:
+            publish_receipt = publish(
+                image=output,
+                worktree=runtime / "publisher",
+                remote=args.remote,
+                branch=args.branch,
+                max_bytes=args.max_image_bytes,
+            )
+            published_state = {
+                "version": 1,
+                "kind": "git",
                 "remote": args.remote,
                 "branch": args.branch,
                 "image_sha256": render_receipt["image_sha256"],
                 "remote_head": publish_receipt["remote_head"],
-            },
-        )
+            }
+        # Persist success only after the remote push or remote equality check.
+        atomic_write_json(publish_state_path, published_state)
         receipt["publish"] = "updated" if publish_receipt["changed"] else "unchanged"
-        receipt["remote_head"] = publish_receipt["remote_head"]
+        if "remote_head" in publish_receipt:
+            receipt["remote_head"] = publish_receipt["remote_head"]
         return receipt
 
 
@@ -102,11 +131,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", type=Path, default=DEFAULT_SNAPSHOT)
     parser.add_argument("--runtime-dir", type=Path, default=DEFAULT_RUNTIME)
-    parser.add_argument(
+    destination = parser.add_mutually_exclusive_group()
+    destination.add_argument(
         "--remote",
         default="",
         help="credential-free Git remote; omit to render locally without publishing",
     )
+    destination.add_argument(
+        "--ssh-target",
+        default="",
+        help="credential-free SSH Host alias for a private HTTPS edge",
+    )
+    parser.add_argument("--ssh-path", default=DEFAULT_REMOTE_PATH)
     parser.add_argument("--branch", default="kindle-live")
     parser.add_argument("--max-source-age", type=int, default=900)
     parser.add_argument("--max-image-bytes", type=int, default=2 * 1024 * 1024)
@@ -126,6 +162,12 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         args.account_label = list(DEFAULT_ACCOUNT_LABELS)
     if len(args.account_label) != 6:
         parser.error("provide exactly six --account-label values")
+    try:
+        if args.ssh_target:
+            validate_target(args.ssh_target)
+            validate_remote_path(args.ssh_path)
+    except PublishError as exc:
+        parser.error(str(exc))
     return args
 
 

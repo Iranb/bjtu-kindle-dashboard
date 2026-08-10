@@ -23,10 +23,10 @@ HPC Widget 的原始快照只留在 Mac。本项目的适配器会再次做数�
 - 账户名固定映射为 `ACCOUNT A` 到 `ACCOUNT F`；
 - 不输出作业 ID、作业名、登录状态细节、令牌或 guardian 原文；
 - 只保留集群总量、四个节点的容量/状态、匿名账户的运行/排队计数；
-- 远端分支只允许 `assets/panel-base.png` 和不含业务数据的校验清单。
+- Git 发布只允许 PNG 和不含业务数据的校验清单；SSH 边缘只接收 PNG。
 
 即便匿名化，GPU 空闲量和作业计数仍属于真实集群使用情况。启用公共 GitHub 发布前，
-必须明确接受这些聚合指标可以公开；否则应改用私有对象存储。不要把原始
+必须明确接受这些聚合指标可以公开；否则应改用受控 HTTPS 边缘。不要把原始
 `snapshot.json` 放进 Git、HTTP 目录或 Kindle。
 
 ## 本地渲染
@@ -74,7 +74,59 @@ https://api.github.com/repos/OWNER/REPOSITORY/contents/assets/panel-base.png?ref
 配置。若后台 `git push` 无法使用 Keychain 凭据，应先修复 Mac 的非交互 Git
 认证，不要把令牌写进 URL。
 
-### 方案 B：私有对象存储
+### 方案 B：SSH 管理的 HTTPS 边缘
+
+当 Kindle 无法访问 GitHub、但可以直连一台 Mac 可 SSH 的 Linux 服务器时，推荐：
+
+```text
+Mac --SSH/原子上传--> 边缘服务器 --TLS 1.2/ETag--> Kindle
+```
+
+仓库提供以下组件：
+
+```text
+scripts/publish_kindle_ssh.py
+server/serve_kindle_panel.py
+server/run_edge_server.sh
+```
+
+SSH 发布器只接受不含凭据的 Host alias 和相对于远端 HOME 的安全路径；上传后在
+服务器核对字节数和 SHA-256，最后用 `mv` 原子替换。边缘服务只开放
+`/panel-base.png` 与 `/healthz`，不提供目录列表，不记录客户端地址或请求 header，
+并在每次打开图片时重新检查 PNG 签名、1072×1448、8 位灰度和大小上限。
+
+如果服务器没有 root Web 服务、sudo 或公网域名，可在确认空闲的非特权端口运行
+Python HTTPS 服务，并使用专用私有 CA：
+
+- CA 私钥只保存在 Mac，权限 `0600`；
+- 服务器私钥在服务器本机生成，权限 `0600`；
+- 服务器证书的 CN 与 SAN 都绑定实际端点身份；
+- Kindle 只安装 CA 公钥；
+- 禁止 `--insecure`，禁止把私钥、CSR、实际地址或生成的 plist 加入 Git。
+
+若用户级 systemd 没有 linger、但 cron 可用，可添加一条带项目标记的每分钟
+`run_edge_server.sh ensure` 守护项。必须保留已有 crontab 内容，不得停止或复用被
+其他进程占用的端口。
+
+先单次发布验证：
+
+```bash
+python3 scripts/publish_kindle_ssh.py \
+  --image "$HOME/Library/Application Support/BJTUKindleSync/outbox/panel-base.png" \
+  --target EDGE_ALIAS
+```
+
+再启用 Mac 定时上传：
+
+```bash
+python3 scripts/install_macos_hpc_sync.py --install \
+  --ssh-target EDGE_ALIAS
+```
+
+`EDGE_ALIAS`、实际地址和端口只存在本机 SSH 配置、LaunchAgent、服务器证书和 Kindle
+配置中，不进入仓库或共享日志。
+
+### 方案 C：私有对象存储
 
 若聚合指标不能公开，使用支持稳定 URL、ETag 和 TLS 1.2 的私有对象存储。写入凭据
 只放在 Mac Keychain；若读取也需认证，把只读 header 放在 Kindle root 所有、权限
@@ -123,6 +175,14 @@ Kindle 侧继续使用现有 `bjtu-dashboard-updater`：
 6. 仅在屏保状态渲染，不模拟电源键，网络窗口结束后由 powerd 自然深度休眠；
 7. 用户主动解锁变为 `active` 时取消后台任务，不替换或刷新画面。
 
+插电时默认采用常在线锁屏模式：每 30 秒续期一次 120 秒的 `suspendGrace`，每
+5 分钟执行一次 ETag 条件请求；用户解锁时立即释放，拔线后最多 30 秒释放。守护
+进程异常退出时，短期 grace 会自行到期。断电后自动回退到 RTC 深睡流程。
+
+短周期 RTC 实机验证应重启服务、写入符合 `MIN_RTC_SECONDS` 的短期 `next-due`，
+再请用户手动锁屏观察正常 `readyToSuspend` 链路；服务不提供也不调用模拟
+`powerButton` 的测试入口。
+
 设备的完整实测边界见 [RTC 唤醒与后台 Wi-Fi 实测记录](rtc-wifi-validation.zh-CN.md)。
 
 ## 故障与恢复
@@ -136,6 +196,21 @@ Kindle 侧继续使用现有 `bjtu-dashboard-updater`：
 | Kindle Wi-Fi/HTTPS 失败 | 退避重试，旧图保留 |
 | 用户在后台窗口解锁 | 取消下载后的替换/渲染，保持前台使用 |
 | 远端分支被人工改写 | 发布器拒绝覆盖额外文件或多提交历史 |
+| SSH 上传中断 | 不记录发布成功，下一轮重试；边缘仍提供旧图 |
+| 边缘 TLS/进程失败 | Kindle 下载失败并保留旧图；cron 或批准的服务恢复边缘 |
 
-当前实现尚未解决两项环境性边界：Mac 长时间关机时无法产生新快照；Kindle 固件或
-网络更换后，需要重新验证 TLS、Wi-Fi 恢复和 powerd 状态机。
+## 当前实测结论
+
+在不记录实际地址、身份和原始日志的前提下，当前部署已经验证：
+
+- Kindle 可从当前网络直接访问 SSH 边缘的用户端口；
+- 私有 CA 的 TLS 1.2 身份校验通过，未使用 `--insecure`；
+- Mac 与 Kindle 的首次 HTTPS 请求为 `200`，同 ETag 再请求为 `304`；
+- Mac、边缘和 Kindle 下载文件的 SHA-256 一致；
+- Kindle 读取到 1072×1448、8 位灰度 PNG；
+- updater 首次执行完成 `.incoming` 校验和原子替换，再次执行返回 not-modified；
+- Mac LaunchAgent 已用 SSH 发布模式运行，边缘由用户 cron 守护。
+
+仍需在当前 HTTPS 边缘上完成一次新的 RTC 唤醒、`abortSuspend`、Wi-Fi 恢复、下载和
+自然深度休眠闭环。Mac 长时间关机时无法产生新快照；Kindle 固件、网络、端点身份、
+端口、CA 或休眠钩子变化后，必须重新验证 TLS 与 powerd 状态机。

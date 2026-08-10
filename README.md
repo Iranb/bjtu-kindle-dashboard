@@ -81,10 +81,10 @@ python scripts/deploy_kindle_updater.py kindle
 ```
 
 Its default public source is `assets/panel-base.png` from this repository,
-fetched through GitHub's raw Contents API. This endpoint proved reachable from
-the target Kindle network and has a short cache lifetime. For a private
-endpoint, keep the URL in the USB-visible `update.conf`, and place the
-authorization header only in the Kindle's root-owned
+fetched through GitHub's raw Contents API. If a Kindle network cannot reach
+GitHub, the Mac can instead publish the anonymized PNG over SSH to the bundled
+minimal HTTPS edge server. For a private endpoint, keep the URL in the
+USB-visible `update.conf`, and place trust/authentication options only in the Kindle's root-owned
 `/var/local/bjtu-dashboard/curl.conf`.
 The service never sources `update.conf`: it accepts only documented keys and rejects
 duplicates, shell syntax, malformed URLs, and out-of-range integers before starting.
@@ -93,13 +93,17 @@ Useful device-side commands:
 
 ```bash
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh status
-/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh test 180
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh fetch-now
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh restart
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh disable
 ```
 
-The normal service never simulates a power-button event. It writes RTC only
-after the final suspend level, wakes into the screensaver, opens a bounded
-network window with `abortSuspend`, and then allows normal suspend to resume.
+The service never simulates a power-button event. When locked on external power,
+it keeps the screen-saver state online with a short, renewed suspend grace and
+checks ETag every five minutes. Unlocking or unplugging releases that hold. On
+battery it writes RTC only after the final suspend level, wakes into the
+screensaver, opens a bounded network window with `abortSuspend`, and then allows
+normal suspend to resume. RTC tests always require the user to lock the device.
 
 ## Documentation
 

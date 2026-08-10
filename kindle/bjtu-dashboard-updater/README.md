@@ -22,6 +22,9 @@ rejected, and integer values must fall within these inclusive ranges:
 | --- | ---: |
 | `BATTERY_INTERVAL_SECONDS` | 180–604800 |
 | `CHARGING_INTERVAL_SECONDS` | 180–86400 |
+| `CHARGING_KEEP_AWAKE` | 0 or 1 |
+| `KEEP_AWAKE_GRACE_SECONDS` | 60–3600 |
+| `KEEP_AWAKE_RENEW_SECONDS` | 10–600 and less than grace |
 | `LOW_BATTERY_PERCENT` | 0–100 |
 | `MIN_RTC_SECONDS` | 60–86400 |
 | `RTC_FINAL_DELAY_SECONDS` | 0–30 |
@@ -43,9 +46,17 @@ Useful commands:
 ```sh
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh status
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh fetch-now
-/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh test 180
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh disable
 ```
 
-The normal service never simulates a power-button event. The explicit `test` command
-does so once to enter the screensaver and validate a short RTC cycle.
+The service never simulates a power-button event. RTC tests require the user to lock
+the device. While locked and charging, the default configuration renews a short
+`suspendGrace`: the screen remains in screen-saver mode, Wi-Fi stays reachable, and
+ETag checks run every five minutes. Unlocking releases the hold immediately; unplugging
+releases it on the next 30-second watchdog tick. If the daemon dies, the 120-second
+grace expires without leaving a permanent power-management override.
+
+The default timing profile is five minutes while charging, one hour between battery
+RTC updates, a three-minute minimum RTC delay, two seconds before the final RTC write,
+60 seconds of wake-classification tolerance, 45 seconds for Wi-Fi, 30 seconds for the
+download, and a 60-second post-connect network-window deadline.

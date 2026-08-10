@@ -21,10 +21,6 @@
           "action": "bin/control.sh fetch-now"
         },
         {
-          "name": "Run 3-minute RTC test",
-          "action": "bin/control.sh test 180"
-        },
-        {
           "name": "Updater status",
           "action": "bin/control.sh status"
         },

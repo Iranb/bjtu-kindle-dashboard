@@ -197,11 +197,17 @@ X-Dashboard-Generated-At: <UTC_TIMESTAMP>
 ```sh
 UPDATE_URL="https://dashboard.example/v1/dashboards/example/panel.png"
 BATTERY_INTERVAL_SECONDS=3600
-CHARGING_INTERVAL_SECONDS=600
+CHARGING_INTERVAL_SECONDS=300
 LOW_BATTERY_PERCENT=20
-NETWORK_WINDOW_SECONDS=30
-WIFI_CONNECT_TIMEOUT_SECONDS=12
-DOWNLOAD_TIMEOUT_SECONDS=12
+CHARGING_KEEP_AWAKE=1
+KEEP_AWAKE_GRACE_SECONDS=120
+KEEP_AWAKE_RENEW_SECONDS=30
+MIN_RTC_SECONDS=180
+RTC_FINAL_DELAY_SECONDS=2
+WAKE_EARLY_TOLERANCE_SECONDS=60
+WIFI_CONNECT_TIMEOUT_SECONDS=45
+DOWNLOAD_TIMEOUT_SECONDS=30
+NETWORK_WINDOW_TIMEOUT_SECONDS=60
 MAX_IMAGE_BYTES=1048576
 MAX_FAILURE_BACKOFF_SECONDS=21600
 ```
@@ -347,6 +353,18 @@ lipc-get-prop com.lab126.wifid cmState
 
 后台任务不得模拟电源键。模拟电源键会退出休眠画面、唤醒原生 UI，并使自动
 重新挂起流程变得不可预测。
+
+### 插电常在线锁屏
+
+在目标设备可以持续供电时，默认不要求无线网卡跨越真正的深度休眠。设备处于
+`screenSaver` 且 `isCharging=1` 时，守护进程设置 120 秒 `suspendGrace`，并每
+30 秒续期；这样锁屏画面保持不变，但系统和 Wi-Fi 仍在线。每 5 分钟只做一次
+ETag 条件请求，内容哈希不变时不写图片也不刷新墨水屏。
+
+`outOfScreenSaver` 会立即把 `suspendGrace` 和 `deferSuspend` 恢复为 0，用户前台
+操作优先。拔线由 30 秒 watchdog 检出并释放；守护进程崩溃时，最后一次 120 秒
+grace 自然到期。断电后仍使用本节前述 RTC 唤醒流程。该模式不是 connected
+standby，也不声称 Wi-Fi 能在真正 suspend 中保持连接。
 
 ## 10. 下载和校验
 

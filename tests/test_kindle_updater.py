@@ -60,6 +60,7 @@ class KindleUpdaterTests(unittest.TestCase):
     def test_validated_power_sequence_is_present(self) -> None:
         daemon = (UPDATER / "bin" / "updater-daemon.sh").read_text("utf-8")
         window = (UPDATER / "bin" / "network-window.sh").read_text("utf-8")
+        control = (UPDATER / "bin" / "control.sh").read_text("utf-8")
         self.assertIn('case "$LEVEL"', daemon)
         self.assertIn('1)', daemon)
         self.assertIn("rtcWakeup", daemon)
@@ -67,6 +68,16 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn('SCHEDULED + WAKE_EARLY_TOLERANCE_SECONDS', daemon)
         self.assertIn("CONNECTED", window)
         self.assertNotIn("wifid enable", daemon)
+        self.assertNotIn("powerButton", daemon)
+        self.assertNotIn("powerButton", control)
+
+    def test_charging_keep_awake_is_bounded_and_user_cancellable(self) -> None:
+        daemon = (UPDATER / "bin" / "updater-daemon.sh").read_text("utf-8")
+        self.assertIn('is_charging && [ "$(power_state)" = "screenSaver" ]', daemon)
+        self.assertIn('suspendGrace "$KEEP_AWAKE_GRACE_SECONDS"', daemon)
+        self.assertIn('sleep "$KEEP_AWAKE_RENEW_SECONDS"', daemon)
+        self.assertIn("*outOfScreenSaver*", daemon)
+        self.assertIn("release_keep_awake", daemon)
 
     def test_fetcher_validates_and_serializes_image_updates(self) -> None:
         common = (UPDATER / "bin" / "common.sh").read_text("utf-8")
@@ -112,6 +123,7 @@ class KindleUpdaterTests(unittest.TestCase):
             " BATTERY_INTERVAL_SECONDS=3600\n",
             "UPDATE_URL=https://example.invalid/a b.png\n",
             "UPDATE_URL=https://example.invalid/$(touch-marker)\n",
+            "KEEP_AWAKE_GRACE_SECONDS=120\nKEEP_AWAKE_RENEW_SECONDS=120\n",
         ]
         for config in invalid_configs:
             with self.subTest(config=config):

@@ -4,17 +4,24 @@
 # never in this USB-visible file or in the URL query string.
 UPDATE_URL="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base.png?ref=main"
 
+# Five-minute checks while plugged in; one-hour RTC fallback on battery.
 BATTERY_INTERVAL_SECONDS=3600
-CHARGING_INTERVAL_SECONDS=600
+CHARGING_INTERVAL_SECONDS=300
 LOW_BATTERY_PERCENT=20
+
+# When locked and charging, remain in screen-saver state but defer deep suspend.
+# The short rolling grace is fail-safe: it expires soon after a crash or unplug.
+CHARGING_KEEP_AWAKE=1
+KEEP_AWAKE_GRACE_SECONDS=120
+KEEP_AWAKE_RENEW_SECONDS=30
 
 MIN_RTC_SECONDS=180
 RTC_FINAL_DELAY_SECONDS=2
 WAKE_EARLY_TOLERANCE_SECONDS=60
 
-WIFI_CONNECT_TIMEOUT_SECONDS=12
-DOWNLOAD_TIMEOUT_SECONDS=12
-NETWORK_WINDOW_TIMEOUT_SECONDS=30
+WIFI_CONNECT_TIMEOUT_SECONDS=45
+DOWNLOAD_TIMEOUT_SECONDS=30
+NETWORK_WINDOW_TIMEOUT_SECONDS=60
 MAX_IMAGE_BYTES=2097152
 
 FAILURE_BACKOFF_1_SECONDS=3600
