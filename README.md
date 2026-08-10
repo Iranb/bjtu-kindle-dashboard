@@ -85,6 +85,8 @@ the target Kindle network and has a short cache lifetime. For a private
 endpoint, keep the URL in the USB-visible `update.conf`, and place the
 authorization header only in the Kindle's root-owned
 `/var/local/bjtu-dashboard/curl.conf`.
+The service never sources `update.conf`: it accepts only documented keys and rejects
+duplicates, shell syntax, malformed URLs, and out-of-range integers before starting.
 
 Useful device-side commands:
 

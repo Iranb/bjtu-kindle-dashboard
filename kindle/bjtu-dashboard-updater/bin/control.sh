@@ -1,7 +1,10 @@
 #!/bin/sh
 
 . /mnt/us/extensions/bjtu-dashboard-updater/bin/common.sh
-load_config
+if ! load_config; then
+    log "config result=fail reason=parse_error"
+    exit 2
+fi
 
 JOB="bjtu-dashboard-updater"
 ACTION="$1"

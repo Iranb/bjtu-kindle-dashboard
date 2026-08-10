@@ -1,3 +1,5 @@
+# This USB-visible file is parsed as strict KEY=VALUE data. Unknown/duplicate keys,
+# shell syntax, malformed lines, and values outside the documented ranges are fatal.
 # Public panel URL. Put authentication headers in /var/local/bjtu-dashboard/curl.conf,
 # never in this USB-visible file or in the URL query string.
 UPDATE_URL="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base.png?ref=main"

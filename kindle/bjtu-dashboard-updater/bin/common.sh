@@ -20,6 +20,33 @@ FETCH_LOCK_DIR="/tmp/bjtu-dashboard-fetch.lock"
 ASSET="$SCREENSAVER_DIR/assets/panel-base.png"
 RENDER="$SCREENSAVER_DIR/bin/render-panel.sh"
 
+is_uint() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+config_error() {
+    printf '%s\n' "invalid config: $CONFIG_FILE:$1: $2" >&2
+    return 1
+}
+
+config_uint_in_range() {
+    CONFIG_VALUE="$1"
+    CONFIG_MIN="$2"
+    CONFIG_MAX="$3"
+    is_uint "$CONFIG_VALUE" || return 1
+    case "$CONFIG_VALUE" in
+        0|[1-9]|[1-9][0-9]*) ;;
+        *) return 1 ;;
+    esac
+    # Bound the digit count before using the shell's signed integer comparison.
+    [ "${#CONFIG_VALUE}" -le 9 ] || return 1
+    [ "$CONFIG_VALUE" -ge "$CONFIG_MIN" ] 2>/dev/null || return 1
+    [ "$CONFIG_VALUE" -le "$CONFIG_MAX" ] 2>/dev/null
+}
+
 load_config() {
     UPDATE_URL=""
     BATTERY_INTERVAL_SECONDS=3600
@@ -38,10 +65,174 @@ load_config() {
     FAILURE_BACKOFF_MAX_SECONDS=21600
     ALLOW_HTTP=0
 
-    if [ -f "$CONFIG_FILE" ]; then
-        # The config contains settings only. Credentials belong in curl.conf.
-        . "$CONFIG_FILE"
-    fi
+    [ -f "$CONFIG_FILE" ] || return 0
+
+    # update.conf is on USB-visible storage and is therefore untrusted input.
+    # Parse assignments as data: never source it and never pass values to eval.
+    CONFIG_LINE_NUMBER=0
+    CONFIG_SEEN_KEYS=""
+    CONFIG_CR=$(printf '\r')
+    while IFS= read -r CONFIG_LINE || [ -n "$CONFIG_LINE" ]; do
+        CONFIG_LINE_NUMBER=$((CONFIG_LINE_NUMBER + 1))
+        case "$CONFIG_LINE" in
+            *"$CONFIG_CR") CONFIG_LINE=${CONFIG_LINE%"$CONFIG_CR"} ;;
+        esac
+        case "$CONFIG_LINE" in
+            *"$CONFIG_CR"*)
+                config_error "$CONFIG_LINE_NUMBER" "embedded carriage return"
+                return 1
+                ;;
+            ''|'#'*) continue ;;
+            *=*) ;;
+            *)
+                config_error "$CONFIG_LINE_NUMBER" "expected KEY=VALUE"
+                return 1
+                ;;
+        esac
+
+        CONFIG_KEY=${CONFIG_LINE%%=*}
+        CONFIG_VALUE=${CONFIG_LINE#*=}
+        case "$CONFIG_KEY" in
+            ''|*[!A-Z0-9_]*)
+                config_error "$CONFIG_LINE_NUMBER" "invalid key syntax"
+                return 1
+                ;;
+        esac
+        case " $CONFIG_SEEN_KEYS " in
+            *" $CONFIG_KEY "*)
+                config_error "$CONFIG_LINE_NUMBER" "duplicate key: $CONFIG_KEY"
+                return 1
+                ;;
+        esac
+        CONFIG_SEEN_KEYS="$CONFIG_SEEN_KEYS $CONFIG_KEY"
+
+        case "$CONFIG_VALUE" in
+            \"*\") CONFIG_VALUE=${CONFIG_VALUE#\"}; CONFIG_VALUE=${CONFIG_VALUE%\"} ;;
+            \'*\') CONFIG_VALUE=${CONFIG_VALUE#\'}; CONFIG_VALUE=${CONFIG_VALUE%\'} ;;
+        esac
+        case "$CONFIG_VALUE" in
+            *\"*|*\'*)
+                config_error "$CONFIG_LINE_NUMBER" "unmatched or embedded quote"
+                return 1
+                ;;
+        esac
+
+        case "$CONFIG_KEY" in
+            UPDATE_URL)
+                [ "${#CONFIG_VALUE}" -le 2048 ] || {
+                    config_error "$CONFIG_LINE_NUMBER" "UPDATE_URL is too long"
+                    return 1
+                }
+                case "$CONFIG_VALUE" in
+                    ''|https://*|http://*) ;;
+                    *)
+                        config_error "$CONFIG_LINE_NUMBER" "UPDATE_URL must be empty, http, or https"
+                        return 1
+                        ;;
+                esac
+                case "$CONFIG_VALUE" in
+                    *[!A-Za-z0-9:/?\&=._~%+#@,-]*)
+                        config_error "$CONFIG_LINE_NUMBER" "UPDATE_URL contains unsupported characters"
+                        return 1
+                        ;;
+                esac
+                UPDATE_URL=$CONFIG_VALUE
+                ;;
+            BATTERY_INTERVAL_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 180 604800 || {
+                    config_error "$CONFIG_LINE_NUMBER" "BATTERY_INTERVAL_SECONDS must be 180..604800"
+                    return 1
+                }
+                BATTERY_INTERVAL_SECONDS=$CONFIG_VALUE
+                ;;
+            CHARGING_INTERVAL_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 180 86400 || {
+                    config_error "$CONFIG_LINE_NUMBER" "CHARGING_INTERVAL_SECONDS must be 180..86400"
+                    return 1
+                }
+                CHARGING_INTERVAL_SECONDS=$CONFIG_VALUE
+                ;;
+            LOW_BATTERY_PERCENT)
+                config_uint_in_range "$CONFIG_VALUE" 0 100 || {
+                    config_error "$CONFIG_LINE_NUMBER" "LOW_BATTERY_PERCENT must be 0..100"
+                    return 1
+                }
+                LOW_BATTERY_PERCENT=$CONFIG_VALUE
+                ;;
+            MIN_RTC_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 60 86400 || {
+                    config_error "$CONFIG_LINE_NUMBER" "MIN_RTC_SECONDS must be 60..86400"
+                    return 1
+                }
+                MIN_RTC_SECONDS=$CONFIG_VALUE
+                ;;
+            RTC_FINAL_DELAY_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 0 30 || {
+                    config_error "$CONFIG_LINE_NUMBER" "RTC_FINAL_DELAY_SECONDS must be 0..30"
+                    return 1
+                }
+                RTC_FINAL_DELAY_SECONDS=$CONFIG_VALUE
+                ;;
+            WAKE_EARLY_TOLERANCE_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 0 3600 || {
+                    config_error "$CONFIG_LINE_NUMBER" "WAKE_EARLY_TOLERANCE_SECONDS must be 0..3600"
+                    return 1
+                }
+                WAKE_EARLY_TOLERANCE_SECONDS=$CONFIG_VALUE
+                ;;
+            WIFI_CONNECT_TIMEOUT_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 1 300 || {
+                    config_error "$CONFIG_LINE_NUMBER" "WIFI_CONNECT_TIMEOUT_SECONDS must be 1..300"
+                    return 1
+                }
+                WIFI_CONNECT_TIMEOUT_SECONDS=$CONFIG_VALUE
+                ;;
+            DOWNLOAD_TIMEOUT_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 1 600 || {
+                    config_error "$CONFIG_LINE_NUMBER" "DOWNLOAD_TIMEOUT_SECONDS must be 1..600"
+                    return 1
+                }
+                DOWNLOAD_TIMEOUT_SECONDS=$CONFIG_VALUE
+                ;;
+            NETWORK_WINDOW_TIMEOUT_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 1 900 || {
+                    config_error "$CONFIG_LINE_NUMBER" "NETWORK_WINDOW_TIMEOUT_SECONDS must be 1..900"
+                    return 1
+                }
+                NETWORK_WINDOW_TIMEOUT_SECONDS=$CONFIG_VALUE
+                ;;
+            MAX_IMAGE_BYTES)
+                config_uint_in_range "$CONFIG_VALUE" 1024 16777216 || {
+                    config_error "$CONFIG_LINE_NUMBER" "MAX_IMAGE_BYTES must be 1024..16777216"
+                    return 1
+                }
+                MAX_IMAGE_BYTES=$CONFIG_VALUE
+                ;;
+            FAILURE_BACKOFF_1_SECONDS|FAILURE_BACKOFF_2_SECONDS|FAILURE_BACKOFF_3_SECONDS|FAILURE_BACKOFF_MAX_SECONDS)
+                config_uint_in_range "$CONFIG_VALUE" 60 604800 || {
+                    config_error "$CONFIG_LINE_NUMBER" "$CONFIG_KEY must be 60..604800"
+                    return 1
+                }
+                case "$CONFIG_KEY" in
+                    FAILURE_BACKOFF_1_SECONDS) FAILURE_BACKOFF_1_SECONDS=$CONFIG_VALUE ;;
+                    FAILURE_BACKOFF_2_SECONDS) FAILURE_BACKOFF_2_SECONDS=$CONFIG_VALUE ;;
+                    FAILURE_BACKOFF_3_SECONDS) FAILURE_BACKOFF_3_SECONDS=$CONFIG_VALUE ;;
+                    FAILURE_BACKOFF_MAX_SECONDS) FAILURE_BACKOFF_MAX_SECONDS=$CONFIG_VALUE ;;
+                esac
+                ;;
+            ALLOW_HTTP)
+                config_uint_in_range "$CONFIG_VALUE" 0 1 || {
+                    config_error "$CONFIG_LINE_NUMBER" "ALLOW_HTTP must be 0 or 1"
+                    return 1
+                }
+                ALLOW_HTTP=$CONFIG_VALUE
+                ;;
+            *)
+                config_error "$CONFIG_LINE_NUMBER" "unknown key: $CONFIG_KEY"
+                return 1
+                ;;
+        esac
+    done < "$CONFIG_FILE"
 }
 
 rotate_log() {
@@ -57,13 +248,6 @@ log() {
     mkdir -p "$LOG_DIR"
     rotate_log
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
-}
-
-is_uint() {
-    case "$1" in
-        ''|*[!0-9]*) return 1 ;;
-        *) return 0 ;;
-    esac
 }
 
 read_uint_file() {

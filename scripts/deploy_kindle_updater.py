@@ -32,7 +32,9 @@ def deploy(host: str, install: bool) -> None:
     if not PAYLOAD.is_dir():
         raise RuntimeError(f"missing updater payload: {PAYLOAD}")
 
-    run(["scp", "-r", str(PAYLOAD), f"{host}:{REMOTE_PARENT}/"])
+    # Modern OpenSSH defaults scp to SFTP, which the Kindle's Dropbear payload
+    # does not provide. Force the legacy SCP protocol supported by USBNetwork.
+    run(["scp", "-O", "-r", str(PAYLOAD), f"{host}:{REMOTE_PARENT}/"])
 
     remote = (
         f"find {shlex.quote(REMOTE_DIR)} -type f "

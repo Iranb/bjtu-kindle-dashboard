@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 from PIL import Image
@@ -9,6 +11,29 @@ UPDATER = ROOT / "kindle" / "bjtu-dashboard-updater"
 
 
 class KindleUpdaterTests(unittest.TestCase):
+    def run_config_parser(self, content: str) -> subprocess.CompletedProcess[str]:
+        common = UPDATER / "bin" / "common.sh"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = Path(temp_dir) / "update.conf"
+            config.write_text(content, encoding="utf-8")
+            return subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    (
+                        '. "$1"; CONFIG_FILE=$2; load_config || exit $?; '
+                        "printf '%s\\n' \"$UPDATE_URL\" \"$BATTERY_INTERVAL_SECONDS\" "
+                        '"$LOW_BATTERY_PERCENT" "$ALLOW_HTTP"'
+                    ),
+                    "sh",
+                    str(common),
+                    str(config),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
     def test_required_payload_files_exist(self) -> None:
         required = [
             "bin/common.sh",
@@ -53,6 +78,84 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn("sha256sum", fetcher)
         self.assertIn('mv -f "$INCOMING" "$ASSET"', fetcher)
 
+    def test_usb_config_is_parsed_as_whitelisted_data(self) -> None:
+        common = (UPDATER / "bin" / "common.sh").read_text("utf-8")
+        self.assertNotIn('. "$CONFIG_FILE"', common)
+        self.assertNotIn("eval ", common)
+
+        result = self.run_config_parser(
+            "# settings\n"
+            'UPDATE_URL="https://api.github.com/repos/example/project/contents/panel.png?ref=main"\n'
+            "BATTERY_INTERVAL_SECONDS=7200\n"
+            "LOW_BATTERY_PERCENT=15\n"
+            "ALLOW_HTTP=0\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "https://api.github.com/repos/example/project/contents/panel.png?ref=main",
+                "7200",
+                "15",
+                "0",
+            ],
+        )
+
+    def test_usb_config_rejects_unknown_duplicate_and_out_of_range_values(self) -> None:
+        invalid_configs = [
+            "RUN_COMMAND=anything\n",
+            "ALLOW_HTTP=0\nALLOW_HTTP=1\n",
+            "LOW_BATTERY_PERCENT=101\n",
+            "DOWNLOAD_TIMEOUT_SECONDS=-1\n",
+            "DOWNLOAD_TIMEOUT_SECONDS=012\n",
+            "MAX_IMAGE_BYTES=999999999999999999999999\n",
+            " BATTERY_INTERVAL_SECONDS=3600\n",
+            "UPDATE_URL=https://example.invalid/a b.png\n",
+            "UPDATE_URL=https://example.invalid/$(touch-marker)\n",
+        ]
+        for config in invalid_configs:
+            with self.subTest(config=config):
+                result = self.run_config_parser(config)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid config:", result.stderr)
+
+    def test_usb_config_never_executes_shell_syntax(self) -> None:
+        common = UPDATER / "bin" / "common.sh"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            marker = Path(temp_dir) / "executed"
+            config = Path(temp_dir) / "update.conf"
+            config.write_text(
+                f'UPDATE_URL="$(touch {marker})"\n',
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    '. "$1"; CONFIG_FILE=$2; load_config',
+                    "sh",
+                    str(common),
+                    str(config),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(marker.exists())
+
+    def test_every_device_shell_script_passes_posix_syntax_check(self) -> None:
+        scripts = list((UPDATER / "bin").glob("*.sh")) + [UPDATER / "install.sh"]
+        for script in scripts:
+            with self.subTest(script=script.name):
+                result = subprocess.run(
+                    ["/bin/sh", "-n", str(script)],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_public_config_contains_no_credentials(self) -> None:
         config = (UPDATER / "update.conf.example").read_text("utf-8").lower()
         self.assertIn("https://", config)
@@ -65,6 +168,7 @@ class KindleUpdaterTests(unittest.TestCase):
         deployer = (ROOT / "scripts" / "deploy_kindle_updater.py").read_text("utf-8")
         self.assertIn('REMOTE_PARENT = "/mnt/us/extensions"', deployer)
         self.assertIn('REMOTE_DIR = f"{REMOTE_PARENT}/bjtu-dashboard-updater"', deployer)
+        self.assertIn('["scp", "-O", "-r"', deployer)
         self.assertIn("install.sh install", deployer)
 
     def test_published_panel_asset_matches_the_device_contract(self) -> None:
