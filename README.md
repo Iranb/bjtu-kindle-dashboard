@@ -15,6 +15,7 @@ a jailbroken Kindle over SSH.
 - Supports a blank header for the native sleep hook or standalone time,
   date and battery rendering.
 - Can deploy and refresh the image through an existing SSH alias.
+- Includes an optional resident Kindle service for low-frequency RTC updates.
 
 ## Install
 
@@ -69,6 +70,32 @@ The default deployment target is:
 The command then runs the installed native screen hook's `render-panel.sh`.
 Override either path with `--remote-image` and `--remote-render`.
 
+## Install scheduled updates
+
+The updater is a separate KUAL/Upstart extension and requires the native sleep
+hook above. Deploy it through an existing Kindle SSH alias:
+
+```bash
+python scripts/deploy_kindle_updater.py kindle
+```
+
+Its default public source is `assets/panel-base.png` from this repository. For
+a private endpoint, keep the URL in the USB-visible `update.conf`, and place
+the authorization header only in the Kindle's root-owned
+`/var/local/bjtu-dashboard/curl.conf`.
+
+Useful device-side commands:
+
+```bash
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh status
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh test 180
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh disable
+```
+
+The normal service never simulates a power-button event. It writes RTC only
+after the final suspend level, wakes into the screensaver, opens a bounded
+network window with `abortSuspend`, and then allows normal suspend to resume.
+
 ## Documentation
 
 - [Native sleep hook design (简体中文)](docs/native-sleep-hook.zh-CN.md)
@@ -86,6 +113,9 @@ paths. They do not contain credentials or device identifiers.
 - Account status is one of `HEALTHY`, `WAITING`, or `SIGN-IN`.
 - `nodes` must contain four entries; block widths adapt to each node's total.
 - `gpus_free` cannot exceed `gpus_total`.
+
+The generated `assets/panel-base.png` uses a blank header so the native Kindle
+hook can overlay the device's current time, date and battery level.
 
 ## Test
 

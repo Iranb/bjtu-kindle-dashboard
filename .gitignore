@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 dist/
 panel-base.png
+!assets/panel-base.png
