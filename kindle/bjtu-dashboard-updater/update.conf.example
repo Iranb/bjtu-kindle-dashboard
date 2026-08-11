@@ -3,6 +3,7 @@
 # Public panel URL. Put authentication headers in /var/local/bjtu-dashboard/curl.conf,
 # never in this USB-visible file or in the URL query string.
 UPDATE_URL="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base.png?ref=main"
+UPDATE_URL_RIGHT="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base-right.png?ref=main"
 
 # portrait: normal placement. right: the Kindle is physically rotated clockwise;
 # the URL must then serve an image rendered with --orientation right.

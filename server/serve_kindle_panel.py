@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serve one validated Kindle panel over authenticated HTTPS with ETag."""
+"""Serve validated portrait/right Kindle panels over HTTPS with ETag."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import struct
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Iterable, NamedTuple
+from typing import Iterable, NamedTuple, Optional
 from urllib.parse import urlsplit
 
 
@@ -62,7 +62,15 @@ def read_panel(path: Path, max_bytes: int) -> Panel:
     return Panel(data=data, etag=f'"sha256-{digest}"', modified=modified)
 
 
-def make_handler(panel_path: Path, max_bytes: int) -> type[BaseHTTPRequestHandler]:
+def make_handler(
+    panel_path: Path,
+    max_bytes: int,
+    right_panel_path: Optional[Path] = None,
+) -> type[BaseHTTPRequestHandler]:
+    routes = {"/panel-base.png": panel_path}
+    if right_panel_path is not None:
+        routes["/panel-base-right.png"] = right_panel_path
+
     class PanelHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "BJTUKindleEdge/1"
@@ -93,11 +101,12 @@ def make_handler(panel_path: Path, max_bytes: int) -> type[BaseHTTPRequestHandle
             if route == "/healthz":
                 self._plain(200, b"ok\n", head_only)
                 return
-            if route != "/panel-base.png":
+            selected = routes.get(route)
+            if selected is None:
                 self._plain(404, b"not found\n", head_only)
                 return
             try:
-                panel = read_panel(panel_path, max_bytes)
+                panel = read_panel(selected, max_bytes)
             except PanelError:
                 self._plain(503, b"panel unavailable\n", head_only)
                 return
@@ -130,6 +139,7 @@ def make_handler(panel_path: Path, max_bytes: int) -> type[BaseHTTPRequestHandle
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--panel", type=Path, required=True)
+    parser.add_argument("--right-panel", type=Path)
     parser.add_argument("--cert", type=Path, required=True)
     parser.add_argument("--key", type=Path, required=True)
     parser.add_argument("--bind", default="0.0.0.0")
@@ -146,8 +156,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         raise SystemExit("--max-image-bytes must be 1024..16777216")
     # Fail before binding rather than serving a broken or missing initial panel.
     read_panel(args.panel, args.max_image_bytes)
+    if args.right_panel is not None:
+        read_panel(args.right_panel, args.max_image_bytes)
     server = ThreadingHTTPServer(
-        (args.bind, args.port), make_handler(args.panel, args.max_image_bytes)
+        (args.bind, args.port),
+        make_handler(args.panel, args.max_image_bytes, args.right_panel),
     )
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2

@@ -34,13 +34,17 @@ class EdgeServerTests(unittest.TestCase):
     def test_panel_contract_and_etag_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             panel_path = Path(temporary) / "panel.png"
+            right_panel_path = Path(temporary) / "panel-right.png"
             Image.new("L", (1072, 1448), 255).save(panel_path)
+            Image.new("L", (1072, 1448), 128).save(right_panel_path)
             panel = MODULE.read_panel(panel_path, 2 * 1024 * 1024)
             self.assertTrue(panel.etag.startswith('"sha256-'))
 
             server = ThreadingHTTPServer(
                 ("127.0.0.1", 0),
-                MODULE.make_handler(panel_path, 2 * 1024 * 1024),
+                MODULE.make_handler(
+                    panel_path, 2 * 1024 * 1024, right_panel_path
+                ),
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -61,6 +65,12 @@ class EdgeServerTests(unittest.TestCase):
                 cached = connection.getresponse()
                 self.assertEqual(cached.status, 304)
                 self.assertEqual(cached.read(), b"")
+
+                connection.request("GET", "/panel-base-right.png")
+                right = connection.getresponse()
+                self.assertEqual(right.status, 200)
+                self.assertEqual(right.read(), right_panel_path.read_bytes())
+                self.assertNotEqual(right.getheader("ETag"), etag)
 
                 connection.request("GET", "/healthz")
                 health = connection.getresponse()

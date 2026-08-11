@@ -67,6 +67,35 @@ python scripts/update_dashboard.py data/dashboard.json \
 The file remains a native 1072 × 1448 grayscale PNG; the renderer composes a
 1448 × 1072 landscape UI and pre-rotates it for the physical placement.
 
+## Display modes
+
+| Mode | Physical placement | Header behavior |
+| --- | --- | --- |
+| `portrait` | Normal upright Kindle | Device time, date, and battery are drawn by the native hook |
+| `right` | Kindle rotated clockwise by 90° | Landscape image is pre-rotated; portrait-coordinate device text is suppressed |
+
+For a private SSH edge, the Mac can keep both variants current in one cycle:
+
+```bash
+python scripts/install_macos_hpc_sync.py --install \
+  --ssh-target EDGE_ALIAS \
+  --publish-both
+```
+
+The edge serves `/panel-base.png` and `/panel-base-right.png`, each with its own
+strong ETag. On Kindle, switch without editing shell code:
+
+```bash
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation portrait
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation right
+```
+
+The same actions appear in KUAL as `Display: portrait` and
+`Display: right 90 degrees`. A switch stops the updater briefly, fetches and
+validates the matching image, atomically replaces the cached panel, then
+restarts scheduling. If the fetch fails, the last known-good image and active
+orientation remain usable.
+
 ## Deploy to Kindle
 
 With an SSH alias such as `kindle` already configured:
@@ -109,6 +138,8 @@ Useful device-side commands:
 ```bash
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh status
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh fetch-now
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation portrait
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation right
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh restart
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh disable
 ```
@@ -142,6 +173,8 @@ paths. They do not contain credentials or device identifiers.
 
 The generated `assets/panel-base.png` uses a blank header so the native Kindle
 hook can overlay the device's current time, date and battery level.
+`assets/panel-base-right.png` is the native-size pre-rotated companion and must
+not receive that portrait-coordinate overlay.
 
 ## Test
 

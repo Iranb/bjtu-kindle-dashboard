@@ -50,8 +50,10 @@ python scripts/run_hpc_kindle_sync.py \
 安装 macOS LaunchAgent 时同样传入 `--orientation right`。方向被纳入语义摘要，
 所以从 `portrait` 切到 `right` 即使 HPC 数值没有变化，也会强制重新渲染并发布。
 
-切回竖屏时把参数改为 `--orientation portrait`。当前发布器的一个 URL 对应一个
-活动方向；这是明确的人工选择，不尝试从 Kindle 加速度计推断摆放方向。
+切回竖屏时使用 `--orientation portrait`。SSH 边缘模式推荐让 LaunchAgent 带
+`--publish-both`，同时维护 `/panel-base.png` 和 `/panel-base-right.png`；Kindle
+在 KUAL 或 `control.sh orientation {portrait|right}` 中选择，不尝试从加速度计
+推断摆放方向。
 
 ## 设备端方向契约
 
@@ -64,11 +66,10 @@ DISPLAY_ORIENTATION=right
 只接受 `portrait` 或 `right`。下载器把有效值原子写入 root 私有状态文件
 `/var/local/bjtu-dashboard/orientation`，供原生休眠钩子读取。
 
-右转图已经包含横向标题栏。现有原生钩子的时间、日期与电量文字是按竖屏坐标
+右转图已经包含横向标题栏。原生钩子的时间、日期与电量文字是按竖屏坐标
 绘制的，不能直接叠加到右转图上。因此 `render-panel.sh` 在读到 `right` 时应只
 绘制基础 PNG 和最终 GC16 刷新，跳过设备实时状态文字；竖屏模式保持原行为。
-这避免出现旋转方向错误的第二套文字。实机钩子完成该判断前，不应把右转模式
-标记为已验证。
+这避免出现旋转方向错误的第二套文字。
 
 ## 验证清单
 
@@ -87,3 +88,8 @@ DISPLAY_ORIENTATION=right
 - 右转模式暂不叠加设备实时电量与时钟，以保证方向正确且不引入 framebuffer
   旋转；
 - 分辨率仅针对 Kindle Paperwhite 3 的 1072 × 1448 屏幕验证。
+
+当前实机已验证：右转资源经 HTTPS 下载后 SHA-256 与 Mac 输出一致，方向状态为
+`right`，方向感知钩子成功完成 GC16 渲染；抓取的 framebuffer 为 1072 × 1448
+灰度 PNG，顺时针放置后文字和两栏布局正向，且没有竖屏时间/电量叠层。休眠事件
+中的双模式往返仍应在每次修改钩子或固件后重新验证。

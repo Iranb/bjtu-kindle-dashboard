@@ -32,6 +32,8 @@ class MacOSSyncInstallerTests(unittest.TestCase):
                 branch="kindle-live",
                 interval=300,
                 orientation="portrait",
+                publish_both=False,
+                ssh_right_path="safe/panel-right.png",
             )
             self.assertEqual(plist["StartInterval"], 300)
             self.assertEqual(plist["WatchPaths"], [str(snapshot)])
@@ -56,6 +58,8 @@ class MacOSSyncInstallerTests(unittest.TestCase):
                 branch="kindle-live",
                 interval=300,
                 orientation="portrait",
+                publish_both=False,
+                ssh_right_path="safe/panel-right.png",
             )
             self.assertNotIn("--remote", plist["ProgramArguments"])
 
@@ -74,6 +78,8 @@ class MacOSSyncInstallerTests(unittest.TestCase):
                 branch="kindle-live",
                 interval=300,
                 orientation="right",
+                publish_both=True,
+                ssh_right_path="safe/panel-right.png",
             )
             arguments = plist["ProgramArguments"]
             self.assertIn("--ssh-target", arguments)
@@ -81,6 +87,9 @@ class MacOSSyncInstallerTests(unittest.TestCase):
             self.assertNotIn("password", str(plist).lower())
             orientation_index = arguments.index("--orientation")
             self.assertEqual(arguments[orientation_index + 1], "right")
+            self.assertIn("--publish-both", arguments)
+            right_path_index = arguments.index("--ssh-right-path")
+            self.assertEqual(arguments[right_path_index + 1], "safe/panel-right.png")
 
     def test_installer_rejects_unsafe_ssh_destination(self) -> None:
         with redirect_stderr(StringIO()), self.assertRaises(SystemExit):

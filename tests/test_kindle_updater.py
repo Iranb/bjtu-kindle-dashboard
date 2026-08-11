@@ -23,7 +23,8 @@ class KindleUpdaterTests(unittest.TestCase):
                     (
                         '. "$1"; CONFIG_FILE=$2; load_config || exit $?; '
                         "printf '%s\\n' \"$UPDATE_URL\" \"$BATTERY_INTERVAL_SECONDS\" "
-                        '"$LOW_BATTERY_PERCENT" "$ALLOW_HTTP" "$DISPLAY_ORIENTATION"'
+                        '"$LOW_BATTERY_PERCENT" "$ALLOW_HTTP" "$DISPLAY_ORIENTATION" '
+                        '"$UPDATE_URL_RIGHT"'
                     ),
                     "sh",
                     str(common),
@@ -45,12 +46,16 @@ class KindleUpdaterTests(unittest.TestCase):
             "update.conf.example",
             "install.sh",
             "menu.json",
+            "integration/render-panel.sh",
         ]
         for relative in required:
             self.assertTrue((UPDATER / relative).is_file(), relative)
 
     def test_shell_scripts_are_unix_text(self) -> None:
-        scripts = list((UPDATER / "bin").glob("*.sh")) + [UPDATER / "install.sh"]
+        scripts = list((UPDATER / "bin").glob("*.sh")) + [
+            UPDATER / "install.sh",
+            UPDATER / "integration" / "render-panel.sh",
+        ]
         for script in scripts:
             content = script.read_bytes()
             self.assertTrue(content.startswith(b"#!/bin/sh\n"), script.name)
@@ -105,6 +110,7 @@ class KindleUpdaterTests(unittest.TestCase):
         result = self.run_config_parser(
             "# settings\n"
             'UPDATE_URL="https://api.github.com/repos/example/project/contents/panel.png?ref=main"\n'
+            'UPDATE_URL_RIGHT="https://api.github.com/repos/example/project/contents/panel-right.png?ref=main"\n'
             "BATTERY_INTERVAL_SECONDS=7200\n"
             "LOW_BATTERY_PERCENT=15\n"
             "ALLOW_HTTP=0\n"
@@ -119,6 +125,7 @@ class KindleUpdaterTests(unittest.TestCase):
                 "15",
                 "0",
                 "right",
+                "https://api.github.com/repos/example/project/contents/panel-right.png?ref=main",
             ],
         )
 
@@ -133,6 +140,7 @@ class KindleUpdaterTests(unittest.TestCase):
             " BATTERY_INTERVAL_SECONDS=3600\n",
             "UPDATE_URL=https://example.invalid/a b.png\n",
             "UPDATE_URL=https://example.invalid/$(touch-marker)\n",
+            "UPDATE_URL_RIGHT=https://example.invalid/a b.png\n",
             "KEEP_AWAKE_GRACE_SECONDS=120\nKEEP_AWAKE_RENEW_SECONDS=120\n",
             "DISPLAY_ORIENTATION=left\n",
             "DISPLAY_ORIENTATION=right;touch-marker\n",
@@ -169,7 +177,10 @@ class KindleUpdaterTests(unittest.TestCase):
             self.assertFalse(marker.exists())
 
     def test_every_device_shell_script_passes_posix_syntax_check(self) -> None:
-        scripts = list((UPDATER / "bin").glob("*.sh")) + [UPDATER / "install.sh"]
+        scripts = list((UPDATER / "bin").glob("*.sh")) + [
+            UPDATER / "install.sh",
+            UPDATER / "integration" / "render-panel.sh",
+        ]
         for script in scripts:
             with self.subTest(script=script.name):
                 result = subprocess.run(
@@ -195,12 +206,24 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn('["scp", "-O", "-r"', deployer)
         self.assertIn("install.sh install", deployer)
 
+    def test_orientation_switch_is_bounded_and_hook_skips_portrait_overlay(self) -> None:
+        control = (UPDATER / "bin" / "control.sh").read_text("utf-8")
+        hook = (UPDATER / "integration" / "render-panel.sh").read_text("utf-8")
+        menu = (UPDATER / "menu.json").read_text("utf-8")
+        self.assertIn('portrait|right)', control)
+        self.assertIn('orientation portrait', menu)
+        self.assertIn('orientation right', menu)
+        self.assertIn('if [ "$ORIENTATION" = "portrait" ]', hook)
+        self.assertNotIn("fbdepth", hook)
+
     def test_published_panel_asset_matches_the_device_contract(self) -> None:
-        asset = ROOT / "assets" / "panel-base.png"
-        self.assertTrue(asset.is_file())
-        with Image.open(asset) as image:
-            self.assertEqual(image.size, (1072, 1448))
-            self.assertEqual(image.mode, "L")
+        for name in ("panel-base.png", "panel-base-right.png"):
+            with self.subTest(name=name):
+                asset = ROOT / "assets" / name
+                self.assertTrue(asset.is_file())
+                with Image.open(asset) as image:
+                    self.assertEqual(image.size, (1072, 1448))
+                    self.assertEqual(image.mode, "L")
 
 
 if __name__ == "__main__":

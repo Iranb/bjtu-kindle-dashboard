@@ -50,6 +50,7 @@ config_uint_in_range() {
 
 load_config() {
     UPDATE_URL=""
+    UPDATE_URL_RIGHT=""
     DISPLAY_ORIENTATION=portrait
     BATTERY_INTERVAL_SECONDS=3600
     CHARGING_INTERVAL_SECONDS=300
@@ -123,25 +124,28 @@ load_config() {
         esac
 
         case "$CONFIG_KEY" in
-            UPDATE_URL)
+            UPDATE_URL|UPDATE_URL_RIGHT)
                 [ "${#CONFIG_VALUE}" -le 2048 ] || {
-                    config_error "$CONFIG_LINE_NUMBER" "UPDATE_URL is too long"
+                    config_error "$CONFIG_LINE_NUMBER" "$CONFIG_KEY is too long"
                     return 1
                 }
                 case "$CONFIG_VALUE" in
                     ''|https://*|http://*) ;;
                     *)
-                        config_error "$CONFIG_LINE_NUMBER" "UPDATE_URL must be empty, http, or https"
+                        config_error "$CONFIG_LINE_NUMBER" "$CONFIG_KEY must be empty, http, or https"
                         return 1
                         ;;
                 esac
                 case "$CONFIG_VALUE" in
                     *[!A-Za-z0-9:/?\&=._~%+#@,-]*)
-                        config_error "$CONFIG_LINE_NUMBER" "UPDATE_URL contains unsupported characters"
+                        config_error "$CONFIG_LINE_NUMBER" "$CONFIG_KEY contains unsupported characters"
                         return 1
                         ;;
                 esac
-                UPDATE_URL=$CONFIG_VALUE
+                case "$CONFIG_KEY" in
+                    UPDATE_URL) UPDATE_URL=$CONFIG_VALUE ;;
+                    UPDATE_URL_RIGHT) UPDATE_URL_RIGHT=$CONFIG_VALUE ;;
+                esac
                 ;;
             DISPLAY_ORIENTATION)
                 case "$CONFIG_VALUE" in

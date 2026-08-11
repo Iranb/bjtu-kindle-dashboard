@@ -20,6 +20,7 @@ rejected, and integer values must fall within these inclusive ranges:
 
 | Setting | Range |
 | --- | ---: |
+| `DISPLAY_ORIENTATION` | `portrait` or `right` |
 | `BATTERY_INTERVAL_SECONDS` | 180–604800 |
 | `CHARGING_INTERVAL_SECONDS` | 180–86400 |
 | `CHARGING_KEEP_AWAKE` | 0 or 1 |
@@ -41,11 +42,18 @@ be empty or begin with `https://`/`http://`, are limited to 2048 visible charact
 use a conservative ASCII URL-character allowlist, and HTTP still requires
 `ALLOW_HTTP=1`.
 
+`UPDATE_URL` serves the portrait image and `UPDATE_URL_RIGHT` serves the
+clockwise-placement image. A direction change never reuses the other mode's
+ETag: it forces one full validated fetch before the root-private orientation
+state changes.
+
 Useful commands:
 
 ```sh
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh status
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh fetch-now
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation portrait
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation right
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh disable
 ```
 

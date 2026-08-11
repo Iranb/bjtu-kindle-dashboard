@@ -5,6 +5,9 @@ STATE_DIR="/var/local/bjtu-dashboard"
 JOB_NAME="bjtu-dashboard-updater"
 JOB_SRC="$EXT_DIR/upstart/$JOB_NAME.conf"
 JOB_DST="/etc/upstart/$JOB_NAME.conf"
+RENDER_SRC="$EXT_DIR/integration/render-panel.sh"
+RENDER_DST="/mnt/us/extensions/bjtu-native-screensaver/bin/render-panel.sh"
+RENDER_BACKUP="$STATE_DIR/render-panel.before-orientation.sh"
 ACTION="${1:-install}"
 
 if [ "$(id -u)" != "0" ]; then
@@ -47,6 +50,23 @@ remove_job() {
     root_ro
 }
 
+install_render_hook() {
+    [ -f "$RENDER_SRC" ] && [ -x "$RENDER_DST" ] || return 1
+    if [ ! -f "$RENDER_BACKUP" ]; then
+        cp "$RENDER_DST" "$RENDER_BACKUP" || return 1
+        chmod 700 "$RENDER_BACKUP" || return 1
+    fi
+    cp "$RENDER_SRC" "$RENDER_DST" || return 1
+    chmod 755 "$RENDER_DST"
+}
+
+restore_render_hook() {
+    if [ -f "$RENDER_BACKUP" ]; then
+        cp "$RENDER_BACKUP" "$RENDER_DST" || return 1
+        chmod 755 "$RENDER_DST" || return 1
+    fi
+}
+
 case "$ACTION" in
     install)
         [ -f "$JOB_SRC" ] || { echo "Missing $JOB_SRC" >&2; exit 1; }
@@ -55,7 +75,7 @@ case "$ACTION" in
             exit 1
         }
 
-        chmod 755 "$EXT_DIR/install.sh" "$EXT_DIR/bin/"*.sh
+        chmod 755 "$EXT_DIR/install.sh" "$EXT_DIR/bin/"*.sh "$RENDER_SRC"
         chmod 644 "$JOB_SRC" "$EXT_DIR/update.conf.example" "$EXT_DIR/menu.json"
         mkdir -p "$EXT_DIR/logs" "$STATE_DIR"
         chmod 700 "$STATE_DIR"
@@ -73,6 +93,11 @@ case "$ACTION" in
                 > "$STATE_DIR/curl.conf"
         fi
         chmod 600 "$STATE_DIR/curl.conf"
+
+        install_render_hook || {
+            echo "Could not install the orientation-aware render hook." >&2
+            exit 1
+        }
 
         install_job || { echo "Could not install the Upstart job." >&2; exit 1; }
 
@@ -96,6 +121,10 @@ case "$ACTION" in
             esac
         fi
         remove_job || { echo "Could not remove the Upstart job." >&2; exit 1; }
+        restore_render_hook || {
+            echo "Updater removed but the previous render hook could not be restored." >&2
+            exit 1
+        }
         if [ "$ACTION" = "purge" ]; then
             rm -rf "$STATE_DIR"
             echo "uninstalled and private state removed"

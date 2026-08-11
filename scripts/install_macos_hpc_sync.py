@@ -49,6 +49,8 @@ def build_plist(
     branch: str,
     interval: int,
     orientation: str,
+    publish_both: bool,
+    ssh_right_path: str,
 ) -> dict[str, Any]:
     arguments = [
         "/usr/bin/env",
@@ -72,6 +74,10 @@ def build_plist(
         arguments.extend(["--remote", remote])
     elif ssh_target:
         arguments.extend(["--ssh-target", ssh_target, "--ssh-path", ssh_path])
+        if publish_both:
+            arguments.extend(
+                ["--publish-both", "--ssh-right-path", ssh_right_path]
+            )
     return {
         "Label": LABEL,
         "ProgramArguments": arguments,
@@ -127,6 +133,8 @@ def plist_for_args(args: argparse.Namespace, python: Path, app_dir: Path) -> dic
         branch=args.branch,
         interval=args.interval,
         orientation=args.orientation,
+        publish_both=args.publish_both,
+        ssh_right_path=args.ssh_right_path,
     )
 
 
@@ -201,12 +209,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--ssh-path",
         default=".local/share/bjtu-kindle-edge/www/panel-base.png",
     )
+    parser.add_argument(
+        "--ssh-right-path",
+        default=".local/share/bjtu-kindle-edge/www/panel-base-right.png",
+    )
     parser.add_argument("--branch", default="kindle-live")
     parser.add_argument("--interval", type=int, default=300)
     parser.add_argument(
         "--orientation",
         choices=("portrait", "right"),
         default="portrait",
+    )
+    parser.add_argument(
+        "--publish-both",
+        action="store_true",
+        help="publish portrait and right variants to an SSH edge",
     )
     return parser
 
@@ -226,6 +243,11 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         if args.ssh_target:
             validate_target(args.ssh_target)
             validate_remote_path(args.ssh_path)
+            validate_remote_path(args.ssh_right_path)
+        if args.publish_both and not args.ssh_target:
+            parser.error("--publish-both requires --ssh-target")
+        if args.publish_both and args.ssh_path == args.ssh_right_path:
+            parser.error("--ssh-path and --ssh-right-path must differ")
     except PublishError as exc:
         parser.error(str(exc))
     return args

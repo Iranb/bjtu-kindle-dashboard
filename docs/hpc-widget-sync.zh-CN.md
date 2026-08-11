@@ -48,6 +48,11 @@ python3 scripts/run_hpc_kindle_sync.py \
 但输出契约仍为 1072×1448 灰度 PNG。界面与设备端配套要求见
 [右转 90° 锁屏界面](rotation-layout.zh-CN.md)。
 
+SSH 边缘长期服务可使用 `--publish-both`，一次生成并原子发布
+`panel-base.png` 与 `panel-base-right.png`。边缘服务器分别计算强 ETag，Kindle
+通过 `DISPLAY_ORIENTATION` 选择 URL；因此切换摆放方向不需要等待 Mac 改写同一
+文件，也不会在两个方向之间误用 `304`。
+
 ## 发布端点
 
 ### 方案 A：专用单提交 Git 分支

@@ -6,6 +6,7 @@ EDGE_ROOT=${BJTU_EDGE_ROOT:-"$HOME/.local/share/bjtu-kindle-edge"}
 PYTHON=${BJTU_EDGE_PYTHON:-python3}
 SERVER="$EDGE_ROOT/app/serve_kindle_panel.py"
 PANEL="$EDGE_ROOT/www/panel-base.png"
+RIGHT_PANEL="$EDGE_ROOT/www/panel-base-right.png"
 CERT="$EDGE_ROOT/pki/server.crt"
 KEY="$EDGE_ROOT/pki/server.key"
 PID_FILE="$EDGE_ROOT/run/server.pid"
@@ -33,6 +34,7 @@ start_server() {
     umask 077
     nohup "$PYTHON" "$SERVER" \
         --panel "$PANEL" \
+        --right-panel "$RIGHT_PANEL" \
         --cert "$CERT" \
         --key "$KEY" \
         --port "$PORT" \

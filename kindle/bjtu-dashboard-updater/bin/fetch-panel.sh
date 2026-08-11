@@ -55,8 +55,12 @@ validate_png() {
     [ "$BIT_DEPTH" -eq 8 ] && [ "$COLOR_TYPE" -eq 0 ] || return 1
 }
 
-[ -n "$UPDATE_URL" ] || fail "missing_url"
-case "$UPDATE_URL" in
+FETCH_URL=$UPDATE_URL
+if [ "$DISPLAY_ORIENTATION" = "right" ]; then
+    FETCH_URL=$UPDATE_URL_RIGHT
+fi
+[ -n "$FETCH_URL" ] || fail "missing_url"
+case "$FETCH_URL" in
     https://*) CURL_PROTO='=https' ;;
     http://*)
         [ "$ALLOW_HTTP" = "1" ] || fail "http_disabled"
@@ -93,7 +97,7 @@ if [ -n "$ETAG" ]; then
         --dump-header "$HEADERS" \
         --output "$INCOMING" \
         --write-out '%{http_code}' \
-        "$UPDATE_URL" 2>> "$LOG_FILE")
+        "$FETCH_URL" 2>> "$LOG_FILE")
 else
     HTTP_CODE=$(/usr/bin/curl \
         --config "$CURL_CONFIG_FILE" \
@@ -106,7 +110,7 @@ else
         --dump-header "$HEADERS" \
         --output "$INCOMING" \
         --write-out '%{http_code}' \
-        "$UPDATE_URL" 2>> "$LOG_FILE")
+        "$FETCH_URL" 2>> "$LOG_FILE")
 fi
 CURL_RC=$?
 
