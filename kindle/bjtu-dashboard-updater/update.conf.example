@@ -1,0 +1,38 @@
+# This USB-visible file is parsed as strict KEY=VALUE data. Unknown/duplicate keys,
+# shell syntax, malformed lines, and values outside the documented ranges are fatal.
+# Public panel URL. Put authentication headers in /var/local/bjtu-dashboard/curl.conf,
+# never in this USB-visible file or in the URL query string.
+UPDATE_URL="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base.png?ref=main"
+UPDATE_URL_RIGHT="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base-right.png?ref=main"
+
+# portrait: normal placement. right: the Kindle is physically rotated clockwise;
+# the URL must then serve an image rendered with --orientation right.
+DISPLAY_ORIENTATION=portrait
+
+# Five-minute checks while plugged in; one-hour RTC fallback on battery.
+BATTERY_INTERVAL_SECONDS=3600
+CHARGING_INTERVAL_SECONDS=300
+LOW_BATTERY_PERCENT=20
+
+# When locked and charging, remain in screen-saver state but defer deep suspend.
+# The short rolling grace is fail-safe: it expires soon after a crash or unplug.
+CHARGING_KEEP_AWAKE=1
+KEEP_AWAKE_GRACE_SECONDS=120
+KEEP_AWAKE_RENEW_SECONDS=30
+
+MIN_RTC_SECONDS=180
+RTC_FINAL_DELAY_SECONDS=2
+WAKE_EARLY_TOLERANCE_SECONDS=60
+
+WIFI_CONNECT_TIMEOUT_SECONDS=45
+DOWNLOAD_TIMEOUT_SECONDS=30
+NETWORK_WINDOW_TIMEOUT_SECONDS=60
+MAX_IMAGE_BYTES=2097152
+
+FAILURE_BACKOFF_1_SECONDS=3600
+FAILURE_BACKOFF_2_SECONDS=7200
+FAILURE_BACKOFF_3_SECONDS=14400
+FAILURE_BACKOFF_MAX_SECONDS=21600
+
+# Only enable this for a controlled LAN test. Production updates must use HTTPS.
+ALLOW_HTTP=0

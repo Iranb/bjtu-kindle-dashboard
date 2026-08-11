@@ -1,0 +1,42 @@
+{
+  "items": [
+    {
+      "name": "BJTU Dashboard Updater",
+      "priority": 71,
+      "items": [
+        {
+          "name": "Enable scheduled updates",
+          "action": "bin/control.sh enable"
+        },
+        {
+          "name": "Disable scheduled updates",
+          "action": "bin/control.sh disable"
+        },
+        {
+          "name": "Restart updater",
+          "action": "bin/control.sh restart"
+        },
+        {
+          "name": "Fetch panel now",
+          "action": "bin/control.sh fetch-now"
+        },
+        {
+          "name": "Display: portrait",
+          "action": "bin/control.sh orientation portrait"
+        },
+        {
+          "name": "Display: right 90 degrees",
+          "action": "bin/control.sh orientation right"
+        },
+        {
+          "name": "Updater status",
+          "action": "bin/control.sh status"
+        },
+        {
+          "name": "Uninstall updater",
+          "action": "install.sh uninstall"
+        }
+      ]
+    }
+  ]
+}

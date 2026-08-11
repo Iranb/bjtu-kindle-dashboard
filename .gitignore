@@ -2,4 +2,6 @@ __pycache__/
 *.py[cod]
 .venv/
 dist/
+work/
 panel-base.png
+!assets/panel-base.png
