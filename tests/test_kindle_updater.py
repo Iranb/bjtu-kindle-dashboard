@@ -23,7 +23,7 @@ class KindleUpdaterTests(unittest.TestCase):
                     (
                         '. "$1"; CONFIG_FILE=$2; load_config || exit $?; '
                         "printf '%s\\n' \"$UPDATE_URL\" \"$BATTERY_INTERVAL_SECONDS\" "
-                        '"$LOW_BATTERY_PERCENT" "$ALLOW_HTTP"'
+                        '"$LOW_BATTERY_PERCENT" "$ALLOW_HTTP" "$DISPLAY_ORIENTATION"'
                     ),
                     "sh",
                     str(common),
@@ -88,6 +88,14 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn("application/vnd.github.raw+json", fetcher)
         self.assertIn("sha256sum", fetcher)
         self.assertIn('mv -f "$INCOMING" "$ASSET"', fetcher)
+        self.assertIn(
+            'write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION"', fetcher
+        )
+        self.assertIn(
+            '[ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ] && [ -f "$ETAG_FILE" ]',
+            fetcher,
+        )
+        self.assertIn('fail "orientation_not_refetched"', fetcher)
 
     def test_usb_config_is_parsed_as_whitelisted_data(self) -> None:
         common = (UPDATER / "bin" / "common.sh").read_text("utf-8")
@@ -100,6 +108,7 @@ class KindleUpdaterTests(unittest.TestCase):
             "BATTERY_INTERVAL_SECONDS=7200\n"
             "LOW_BATTERY_PERCENT=15\n"
             "ALLOW_HTTP=0\n"
+            "DISPLAY_ORIENTATION=right\n"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
@@ -109,6 +118,7 @@ class KindleUpdaterTests(unittest.TestCase):
                 "7200",
                 "15",
                 "0",
+                "right",
             ],
         )
 
@@ -124,6 +134,8 @@ class KindleUpdaterTests(unittest.TestCase):
             "UPDATE_URL=https://example.invalid/a b.png\n",
             "UPDATE_URL=https://example.invalid/$(touch-marker)\n",
             "KEEP_AWAKE_GRACE_SECONDS=120\nKEEP_AWAKE_RENEW_SECONDS=120\n",
+            "DISPLAY_ORIENTATION=left\n",
+            "DISPLAY_ORIENTATION=right;touch-marker\n",
         ]
         for config in invalid_configs:
             with self.subTest(config=config):

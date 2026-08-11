@@ -22,6 +22,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 WIDTH = 1072
 HEIGHT = 1448
+LANDSCAPE_WIDTH = HEIGHT
+LANDSCAPE_HEIGHT = WIDTH
+ORIENTATIONS = ("portrait", "right")
 WHITE = 255
 DARK = 16
 MID = 119
@@ -367,6 +370,171 @@ class Renderer:
             self.rule((50, separators[row], 1022, separators[row]), soft=True)
 
 
+class RightLandscapeRenderer(Renderer):
+    """Render a landscape dashboard for a device rotated clockwise.
+
+    The dashboard is composed upright on a 1448x1072 logical canvas, then
+    rotated counter-clockwise into the Kindle's native 1072x1448 framebuffer.
+    No framebuffer rotation or stock-UI orientation change is required.
+    """
+
+    def __init__(self, data: dict[str, Any], header_mode: str) -> None:
+        super().__init__(data, header_mode)
+        self.image = Image.new("L", (LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT), WHITE)
+        self.draw = ImageDraw.Draw(self.image)
+
+    def render_logical(self) -> Image.Image:
+        self.draw.rectangle(
+            (0, 0, LANDSCAPE_WIDTH - 1, LANDSCAPE_HEIGHT - 1), fill=WHITE
+        )
+        self.draw.rectangle(
+            (2, 2, LANDSCAPE_WIDTH - 3, LANDSCAPE_HEIGHT - 3),
+            outline=DARK,
+            width=4,
+        )
+        self.landscape_header()
+        self.landscape_capacity()
+        self.landscape_nodes()
+        self.landscape_accounts()
+        return self.image
+
+    def render(self) -> Image.Image:
+        logical = self.render_logical()
+        return logical.transpose(Image.Transpose.ROTATE_90)
+
+    def landscape_header(self) -> None:
+        cluster = self.data["cluster"]
+        self.draw.rectangle((52, 47, 98, 91), outline=DARK, width=6)
+        self.draw.rectangle((66, 60, 84, 78), fill=DARK)
+        self.text((120, 69), cluster["name"], 32, "sans_bold", spacing=2.2)
+        self.text((121, 96), cluster["subtitle"], 17, spacing=1.8)
+
+        if self.header_mode != "blank":
+            header = self.data["header"]
+            if self.header_mode == "now":
+                current = datetime.now()
+                time_value = current.strftime("%H:%M")
+                date_value = current.strftime("%a . %b %d").upper().replace(" 0", " ")
+            else:
+                time_value = header["time"]
+                date_value = header["date"]
+            self.text((1125, 76), time_value, 45, "sans_bold", "ms")
+            self.text((1125, 105), date_value, 18, anchor="ms", spacing=1.8)
+            self.draw.rectangle((1256, 54, 1309, 78), outline=DARK, width=5)
+            self.draw.rectangle((1309, 60, 1316, 72), fill=DARK)
+            self.draw.rectangle((1262, 60, 1302, 72), fill=DARK)
+            self.text((1331, 70), f"{header['battery']}%", 29, "sans_bold")
+            self.text((1331, 98), "BATTERY", 16, spacing=1.5)
+        else:
+            self.text((1396, 77), "HPC STATUS BOARD", 17, "sans_bold", "rs", spacing=1.5)
+            self.text((1396, 101), "AUTO-UPDATED", 14, anchor="rs", spacing=1.2)
+        self.rule((52, 128, 1396, 128), width=4)
+
+    def landscape_capacity(self) -> None:
+        cap = self.data["capacity"]
+        self.text((52, 174), "LIVE CAPACITY", 20, spacing=1.5)
+        if cap["all_systems_online"]:
+            self.draw.ellipse((254, 159, 269, 174), outline=DARK, width=4)
+            status = "ALL SYSTEMS ONLINE"
+        else:
+            self.draw.ellipse((254, 159, 269, 174), fill=DARK)
+            status = "ATTENTION REQUIRED"
+        self.text((280, 174), status, 18, spacing=1.2)
+
+        self.text((56, 322), cap["gpus_free"], 132, "serif")
+        self.text((337, 330), f"/ {cap['gpus_total']}", 55, "serif")
+        self.text((58, 382), "GPUs FREE", 32, "sans_bold", spacing=1.2)
+        percent = cap["gpus_free"] / cap["gpus_total"] * 100
+        self.text((488, 382), f"{percent:.1f}% AVAILABLE", 18, anchor="rs", spacing=1.3)
+
+        self.rule((528, 158, 528, 400), width=4)
+        stats = (
+            (566, cap["cpu_cores_free"], "CPU CORES FREE"),
+            (854, cap["jobs_running"], "JOBS RUNNING"),
+            (1125, cap["jobs_queued"], "JOBS QUEUED"),
+        )
+        for x, number, label in stats:
+            self.text((x, 297), number, 86, "serif")
+            self.text((x, 337), label, 19, "sans_bold", spacing=1.1)
+        self.rule((820, 202, 820, 360), soft=True)
+        self.rule((1091, 202, 1091, 360), soft=True)
+
+        used = cap["gpus_total"] - cap["gpus_free"]
+        self.text((52, 432), "GPU CAPACITY", 19, "sans_bold", spacing=1.3)
+        self.text(
+            (1396, 432),
+            f"USED {used}    FREE {cap['gpus_free']}",
+            18,
+            anchor="rs",
+            spacing=1.0,
+        )
+        self.blocks(52, 449, 1344, 29, cap["gpus_total"], used, gap=3)
+        self.rule((52, 505, 1396, 505), width=6)
+
+    def landscape_nodes(self) -> None:
+        self.text((52, 559), "NODE AVAILABILITY", 30, spacing=2.0)
+        self.draw.rectangle((602, 542, 615, 556), fill=DARK)
+        self.text((624, 559), "USED", 15)
+        self.draw.rectangle((690, 542, 703, 556), fill=WHITE, outline=DARK, width=2)
+        self.text((712, 559), "FREE", 15)
+        self.rule((52, 580, 780, 580), soft=True)
+
+        baselines = (628, 725, 822, 919)
+        for index, (node, baseline) in enumerate(zip(self.data["nodes"], baselines)):
+            self.text((52, baseline), node["name"], 25, "sans_bold")
+            self.text((52, baseline + 24), node["state"], 16, spacing=1.3)
+            used = node["total"] - node["free"]
+            self.blocks(235, baseline - 18, 375, 24, node["total"], used, gap=6)
+            self.text((706, baseline + 9), node["free"], 39, "serif", anchor="rs")
+            self.text((716, baseline + 7), f"/ {node['total']} FREE", 16)
+            if index < 3:
+                self.rule((52, baseline + 48, 780, baseline + 48), soft=True)
+
+    def landscape_accounts(self) -> None:
+        left = 820
+        self.rule((800, 532, 800, 1022), width=4)
+        self.text((left, 559), "ACCOUNT ACTIVITY", 30, spacing=2.0)
+        self.text((1396, 558), "6 ACCOUNTS", 17, anchor="rs", spacing=1.4)
+        self.rule((left, 580, 1396, 580), soft=True)
+
+        baselines = (625, 694, 763, 832, 901, 970)
+        for index, (account, baseline) in enumerate(zip(self.data["accounts"], baselines)):
+            status = account["status"]
+            self.text(
+                (left, baseline),
+                account["name"],
+                23,
+                "sans_bold",
+                underline=status == "SIGN-IN",
+            )
+            self.status_marker(1111, baseline - 8, status)
+            self.text(
+                (1132, baseline),
+                status,
+                18,
+                underline=status == "SIGN-IN",
+            )
+            self.text(
+                (1396, baseline),
+                f"{account['running']} RUN  ·  {account['queued']} QUEUE",
+                17,
+                anchor="rs",
+                spacing=0.7,
+            )
+            if index < 5:
+                self.rule((left, baseline + 25, 1396, baseline + 25), soft=True)
+
+
+def render_dashboard(
+    data: dict[str, Any], header_mode: str = "blank", orientation: str = "portrait"
+) -> Image.Image:
+    if orientation == "portrait":
+        return Renderer(data, header_mode).render()
+    if orientation == "right":
+        return RightLandscapeRenderer(data, header_mode).render()
+    raise DashboardError(f"unsupported orientation: {orientation}")
+
+
 def load_data(path: Path) -> dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -405,6 +573,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="blank for native Kindle overlay, data for JSON values, now for local time",
     )
     parser.add_argument(
+        "--orientation",
+        choices=ORIENTATIONS,
+        default="portrait",
+        help="portrait, or right when the Kindle is physically rotated clockwise",
+    )
+    parser.add_argument(
         "--deploy",
         metavar="SSH_HOST",
         help="copy the output to a Kindle and refresh it, e.g. kindle",
@@ -418,12 +592,13 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         data = load_data(args.data)
-        image = Renderer(data, args.header_mode).render()
+        image = render_dashboard(data, args.header_mode, args.orientation)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         image.save(args.output, format="PNG", optimize=True)
         print(f"rendered={args.output.resolve()}")
         print(f"size={image.width}x{image.height}")
         print(f"mode={image.mode}")
+        print(f"orientation={args.orientation}")
         if args.deploy:
             deploy(args.output, args.deploy, args.remote_image, args.remote_render)
             print(f"deployed={args.deploy}:{args.remote_image}")

@@ -48,6 +48,7 @@ def build_plist(
     ssh_path: str,
     branch: str,
     interval: int,
+    orientation: str,
 ) -> dict[str, Any]:
     arguments = [
         "/usr/bin/env",
@@ -64,6 +65,8 @@ def build_plist(
         str(runtime_dir),
         "--branch",
         branch,
+        "--orientation",
+        orientation,
     ]
     if remote:
         arguments.extend(["--remote", remote])
@@ -123,6 +126,7 @@ def plist_for_args(args: argparse.Namespace, python: Path, app_dir: Path) -> dic
         ssh_path=args.ssh_path,
         branch=args.branch,
         interval=args.interval,
+        orientation=args.orientation,
     )
 
 
@@ -199,6 +203,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--branch", default="kindle-live")
     parser.add_argument("--interval", type=int, default=300)
+    parser.add_argument(
+        "--orientation",
+        choices=("portrait", "right"),
+        default="portrait",
+    )
     return parser
 
 

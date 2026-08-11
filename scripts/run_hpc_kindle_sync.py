@@ -60,6 +60,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             max_source_age=args.max_source_age,
             account_label=args.account_label,
             force=args.force_render,
+            orientation=args.orientation,
         )
         render_receipt = sync_once(sync_args)
         receipt: dict[str, Any] = {
@@ -147,6 +148,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-source-age", type=int, default=900)
     parser.add_argument("--max-image-bytes", type=int, default=2 * 1024 * 1024)
     parser.add_argument("--force-render", action="store_true")
+    parser.add_argument(
+        "--orientation",
+        choices=("portrait", "right"),
+        default="portrait",
+    )
     parser.add_argument("--account-label", action="append", default=[])
     return parser
 

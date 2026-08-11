@@ -15,6 +15,7 @@ FAILURE_COUNT_FILE="$STATE_DIR/failure-count"
 LAST_RESULT_FILE="$STATE_DIR/last-result"
 LAST_SUCCESS_FILE="$STATE_DIR/last-success"
 ETAG_FILE="$STATE_DIR/etag"
+ORIENTATION_FILE="$STATE_DIR/orientation"
 CURL_CONFIG_FILE="$STATE_DIR/curl.conf"
 FETCH_LOCK_DIR="/tmp/bjtu-dashboard-fetch.lock"
 ASSET="$SCREENSAVER_DIR/assets/panel-base.png"
@@ -49,6 +50,7 @@ config_uint_in_range() {
 
 load_config() {
     UPDATE_URL=""
+    DISPLAY_ORIENTATION=portrait
     BATTERY_INTERVAL_SECONDS=3600
     CHARGING_INTERVAL_SECONDS=300
     CHARGING_KEEP_AWAKE=1
@@ -140,6 +142,15 @@ load_config() {
                         ;;
                 esac
                 UPDATE_URL=$CONFIG_VALUE
+                ;;
+            DISPLAY_ORIENTATION)
+                case "$CONFIG_VALUE" in
+                    portrait|right) DISPLAY_ORIENTATION=$CONFIG_VALUE ;;
+                    *)
+                        config_error "$CONFIG_LINE_NUMBER" "DISPLAY_ORIENTATION must be portrait or right"
+                        return 1
+                        ;;
+                esac
                 ;;
             BATTERY_INTERVAL_SECONDS)
                 config_uint_in_range "$CONFIG_VALUE" 180 604800 || {

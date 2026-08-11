@@ -53,7 +53,7 @@ case "$ACTION" in
         fi
         NEXT_DUE=$(read_uint_file "$NEXT_DUE_FILE" 2>/dev/null || printf none)
         LAST_RESULT=$(cat "$LAST_RESULT_FILE" 2>/dev/null || printf none)
-        echo "$RUN_STATE next_due=$NEXT_DUE last_result=$LAST_RESULT"
+        echo "$RUN_STATE orientation=$DISPLAY_ORIENTATION next_due=$NEXT_DUE last_result=$LAST_RESULT"
         ;;
     fetch-now)
         BJTU_ALLOW_ACTIVE=1 BJTU_NO_RENDER=1 "$EXT_DIR/bin/fetch-panel.sh"

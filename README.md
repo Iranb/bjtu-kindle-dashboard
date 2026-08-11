@@ -2,6 +2,8 @@
 
 ![Dashboard preview](assets/dashboard-preview.png)
 
+![Right-rotated landscape preview](assets/dashboard-right-preview.png)
+
 A data-driven, grayscale cluster dashboard for a Kindle Paperwhite 3. Edit one
 JSON file, render a pixel-accurate 1072 × 1448 PNG, and optionally deploy it to
 a jailbroken Kindle over SSH.
@@ -17,6 +19,7 @@ a jailbroken Kindle over SSH.
 - Can deploy and refresh the image through an existing SSH alias.
 - Includes an optional resident Kindle service for low-frequency RTC updates.
 - Can turn the local BJTU HPC Widget snapshot into an anonymized live lock screen.
+- Includes a purpose-built landscape layout for clockwise 90° physical placement.
 
 ## Install
 
@@ -51,6 +54,18 @@ python scripts/update_dashboard.py data/dashboard.json \
   --header-mode now \
   --output dashboard.png
 ```
+
+Render for a Kindle that will be placed clockwise/right by 90°:
+
+```bash
+python scripts/update_dashboard.py data/dashboard.json \
+  --orientation right \
+  --header-mode data \
+  --output dashboard-right-native.png
+```
+
+The file remains a native 1072 × 1448 grayscale PNG; the renderer composes a
+1448 × 1072 landscape UI and pre-rotates it for the physical placement.
 
 ## Deploy to Kindle
 
@@ -112,6 +127,7 @@ normal suspend to resume. RTC tests always require the user to lock the device.
 - [Scheduled updates while suspended (简体中文)](docs/scheduled-sleep-updates.zh-CN.md)
 - [RTC wake and background Wi-Fi validation (简体中文)](docs/rtc-wifi-validation.zh-CN.md)
 - [Local HPC Widget to Kindle sync (简体中文)](docs/hpc-widget-sync.zh-CN.md)
+- [Clockwise 90° lock-screen layout (简体中文)](docs/rotation-layout.zh-CN.md)
 
 All guides use placeholders for network addresses, local usernames and key
 paths. They do not contain credentials or device identifiers.

@@ -19,7 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from update_dashboard import HEIGHT, WIDTH, Renderer, validate  # noqa: E402
+from update_dashboard import HEIGHT, ORIENTATIONS, WIDTH, render_dashboard, validate  # noqa: E402
 
 
 DEFAULT_SNAPSHOT = (
@@ -253,11 +253,13 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def render_atomic(path: Path, dashboard: dict[str, Any]) -> str:
+def render_atomic(
+    path: Path, dashboard: dict[str, Any], orientation: str = "portrait"
+) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
     try:
-        image = Renderer(dashboard, "blank").render()
+        image = render_dashboard(dashboard, "blank", orientation)
         image.save(temporary, format="PNG", optimize=True)
         with Image.open(temporary) as verified:
             if verified.size != (WIDTH, HEIGHT) or verified.mode != "L":
@@ -280,7 +282,9 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
         account_labels=tuple(args.account_label),
         max_age_seconds=args.max_source_age,
     )
-    semantic_sha256 = canonical_digest(dashboard)
+    semantic_sha256 = canonical_digest(
+        {"dashboard": dashboard, "orientation": args.orientation}
+    )
     previous_state: dict[str, Any] = {}
     if args.state_file.is_file():
         try:
@@ -295,7 +299,7 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
     )
     atomic_write_json(args.data_output, dashboard)
     if should_render:
-        image_sha256 = render_atomic(args.image_output, dashboard)
+        image_sha256 = render_atomic(args.image_output, dashboard, args.orientation)
     else:
         image_sha256 = file_digest(args.image_output)
 
@@ -307,6 +311,7 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
         "semantic_sha256": semantic_sha256,
         "image_sha256": image_sha256,
         "stale": "STALE" in dashboard["cluster"]["subtitle"],
+        "orientation": args.orientation,
     }
     atomic_write_json(args.state_file, state)
     return {
@@ -317,6 +322,7 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "L",
         "stale": state["stale"],
         "source_checked_at": state["source_checked_at"],
+        "orientation": args.orientation,
     }
 
 
@@ -334,6 +340,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="anonymous display label; provide exactly six or omit for ACCOUNT A-F",
     )
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--orientation",
+        choices=ORIENTATIONS,
+        default="portrait",
+        help="portrait, or right for clockwise physical placement",
+    )
     return parser
 
 

@@ -69,8 +69,13 @@ esac
 [ -f "$CURL_CONFIG_FILE" ] || fail "curl_config_missing"
 [ -d "$SCREENSAVER_DIR/assets" ] || fail "asset_directory_missing"
 
+CURRENT_ORIENTATION=""
+if [ -f "$ORIENTATION_FILE" ]; then
+    CURRENT_ORIENTATION=$(tr -d '\r\n' < "$ORIENTATION_FILE" | cut -c1-16)
+fi
+
 ETAG=""
-if [ -f "$ETAG_FILE" ]; then
+if [ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ] && [ -f "$ETAG_FILE" ]; then
     ETAG=$(tr -d '\r\n' < "$ETAG_FILE" | cut -c1-256)
 fi
 
@@ -108,6 +113,8 @@ CURL_RC=$?
 [ "$CURL_RC" -eq 0 ] || fail "curl_$CURL_RC"
 case "$HTTP_CODE" in
     304)
+        [ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ] || fail "orientation_not_refetched"
+        write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION" || fail "orientation_state"
         save_response_etag
         write_state "$LAST_SUCCESS_FILE" "$(now_epoch)" >/dev/null 2>&1 || true
         write_state "$LAST_RESULT_FILE" "not-modified:$(now_epoch)" >/dev/null 2>&1 || true
@@ -138,6 +145,7 @@ if [ -f "$ASSET" ]; then
 fi
 
 if [ "$NEW_HASH" = "$OLD_HASH" ]; then
+    write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION" || fail "orientation_state"
     save_response_etag
     write_state "$LAST_SUCCESS_FILE" "$(now_epoch)" >/dev/null 2>&1 || true
     write_state "$LAST_RESULT_FILE" "unchanged:$(now_epoch)" >/dev/null 2>&1 || true
@@ -152,6 +160,7 @@ fi
 
 chmod 644 "$INCOMING" || fail "chmod"
 mv -f "$INCOMING" "$ASSET" || fail "atomic_replace"
+write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION" || fail "orientation_state"
 save_response_etag
 write_state "$STATE_DIR/last-hash" "$NEW_HASH" >/dev/null 2>&1 || true
 write_state "$LAST_SUCCESS_FILE" "$(now_epoch)" >/dev/null 2>&1 || true

@@ -132,6 +132,28 @@ class HPCWidgetSyncTests(unittest.TestCase):
                 self.assertEqual(image.size, (1072, 1448))
                 self.assertEqual(image.mode, "L")
 
+    def test_orientation_change_forces_rerender(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshot_path = root / "snapshot.json"
+            snapshot_path.write_text(json.dumps(sample_snapshot()), encoding="utf-8")
+            base = [
+                "--snapshot", str(snapshot_path),
+                "--image-output", str(root / "panel.png"),
+                "--data-output", str(root / "dashboard.json"),
+                "--state-file", str(root / "state.json"),
+            ]
+            portrait = MODULE.sync_once(MODULE.parse_args(base))
+            right = MODULE.sync_once(
+                MODULE.parse_args([*base, "--orientation", "right"])
+            )
+            self.assertTrue(portrait["changed"])
+            self.assertTrue(right["changed"])
+            self.assertEqual(right["orientation"], "right")
+            with Image.open(root / "panel.png") as image:
+                self.assertEqual(image.size, (1072, 1448))
+                self.assertEqual(image.mode, "L")
+
 
 if __name__ == "__main__":
     unittest.main()

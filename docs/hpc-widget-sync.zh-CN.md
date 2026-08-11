@@ -43,6 +43,11 @@ python3 scripts/run_hpc_kindle_sync.py \
 不会重写 PNG。快照超过 15 分钟、采集返回非零或携带错误时，画面明确显示
 `STALE`，而不是把旧数据伪装成实时数据。
 
+需要把 Kindle 顺时针右转 90° 放置时，给同步器或 LaunchAgent 安装器增加
+`--orientation right`。方向也属于语义摘要的一部分，因此切换方向会强制重绘，
+但输出契约仍为 1072×1448 灰度 PNG。界面与设备端配套要求见
+[右转 90° 锁屏界面](rotation-layout.zh-CN.md)。
+
 ## 发布端点
 
 ### 方案 A：专用单提交 Git 分支

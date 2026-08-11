@@ -33,6 +33,21 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(reopened.size, (1072, 1448))
                 self.assertEqual(reopened.mode, "L")
 
+    def test_renders_right_landscape_as_native_framebuffer_png(self):
+        data = MODULE.validate(copy.deepcopy(self.data))
+        renderer = MODULE.RightLandscapeRenderer(data, "data")
+        logical = renderer.render_logical()
+        self.assertEqual(logical.size, (1448, 1072))
+        rendered = MODULE.render_dashboard(data, "data", "right")
+        self.assertEqual(rendered.size, (1072, 1448))
+        self.assertEqual(rendered.mode, "L")
+
+    def test_rejects_unknown_orientation(self):
+        with self.assertRaises(MODULE.DashboardError):
+            MODULE.render_dashboard(
+                MODULE.validate(copy.deepcopy(self.data)), "data", "upside-down"
+            )
+
     def test_rejects_impossible_gpu_count(self):
         invalid = copy.deepcopy(self.data)
         invalid["capacity"]["gpus_free"] = 33
