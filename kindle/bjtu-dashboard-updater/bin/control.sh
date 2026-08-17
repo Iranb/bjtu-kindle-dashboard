@@ -69,6 +69,20 @@ set_orientation() {
     echo "orientation=$NEW_ORIENTATION"
 }
 
+toggle_orientation() {
+    CURRENT_ORIENTATION="$DISPLAY_ORIENTATION"
+    if [ -f "$ORIENTATION_FILE" ]; then
+        STORED_ORIENTATION=$(tr -d '\r\n' < "$ORIENTATION_FILE" | cut -c1-16)
+        case "$STORED_ORIENTATION" in
+            portrait|right) CURRENT_ORIENTATION="$STORED_ORIENTATION" ;;
+        esac
+    fi
+    case "$CURRENT_ORIENTATION" in
+        right) set_orientation portrait ;;
+        *) set_orientation right ;;
+    esac
+}
+
 case "$ACTION" in
     enable)
         [ -n "$UPDATE_URL" ] || {
@@ -105,7 +119,10 @@ case "$ACTION" in
         BJTU_ALLOW_ACTIVE=1 BJTU_NO_RENDER=1 "$EXT_DIR/bin/fetch-panel.sh"
         ;;
     orientation)
-        set_orientation "$2"
+        case "$2" in
+            toggle) toggle_orientation ;;
+            *) set_orientation "$2" ;;
+        esac
         ;;
     logs)
         tail -n "${2:-80}" "$LOG_FILE" 2>/dev/null
@@ -114,7 +131,7 @@ case "$ACTION" in
         exec /bin/sh "$EXT_DIR/install.sh" uninstall
         ;;
     *)
-        echo "usage: $0 {enable|disable|restart|status|fetch-now|orientation {portrait|right}|logs [lines]|uninstall}" >&2
+        echo "usage: $0 {enable|disable|restart|status|fetch-now|orientation {portrait|right|toggle}|logs [lines]|uninstall}" >&2
         exit 2
         ;;
 esac

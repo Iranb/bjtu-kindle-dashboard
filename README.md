@@ -96,6 +96,11 @@ validates the matching image, atomically replaces the cached panel, then
 restarts scheduling. If the fetch fails, the last known-good image and active
 orientation remain usable.
 
+KUAL also provides a single `Toggle portrait / right 90 degrees` button. It
+reads the root-private active orientation and switches to the other validated
+panel, so a previously failed download cannot make the next toggle run in the
+wrong direction.
+
 ## Deploy to Kindle
 
 With an SSH alias such as `kindle` already configured:
@@ -142,6 +147,7 @@ Useful device-side commands:
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh fetch-now
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation portrait
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation right
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation toggle
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh restart
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh disable
 ```
