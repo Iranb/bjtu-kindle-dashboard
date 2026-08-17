@@ -164,6 +164,7 @@ normal suspend to resume. RTC tests always require the user to lock the device.
 
 ## Documentation
 
+- [Kindle power, sleep and operations guide (简体中文)](docs/kindle-power-operations.zh-CN.md)
 - [Native sleep hook design (简体中文)](docs/native-sleep-hook.zh-CN.md)
 - [Connecting to Kindle from Windows (简体中文)](docs/connect-kindle.zh-CN.md)
 - [Scheduled updates while suspended (简体中文)](docs/scheduled-sleep-updates.zh-CN.md)
