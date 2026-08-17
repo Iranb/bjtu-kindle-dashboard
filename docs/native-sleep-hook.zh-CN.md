@@ -85,6 +85,10 @@ flowchart TD
 | `xrefresh.lua` | 唤醒时向原生 X11 界面发送重绘请求 |
 | `control.sh` | KUAL 和 SSH 共用的启用、停用、预览及状态入口 |
 
+竖屏模式的时间和日期必须由 `render-panel.sh` 显式使用中国标准时间
+（UTC+8），不能依赖 Kindle 的系统时区；设备系统时钟即使使用 UTC，锁屏
+页眉仍应显示 UTC+8。右转模式继续不叠加这组竖屏坐标内容。
+
 ## 5. 启动过程
 
 Upstart 作业在 `framework` 启动后运行，并先检查扩展目录下是否存在
