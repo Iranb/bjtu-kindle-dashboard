@@ -131,6 +131,9 @@ hook above. Deploy it through an existing Kindle SSH alias:
 python scripts/deploy_kindle_updater.py kindle
 ```
 
+The deployed package includes KUAL's required `config.xml` registration
+manifest. Reopen KUAL after first installation to load `BJTU Dashboard Updater`.
+
 Its default public source is `assets/panel-base.png` from this repository,
 fetched through GitHub's raw Contents API. If a Kindle network cannot reach
 GitHub, the Mac can instead publish the anonymized PNG over SSH to the bundled

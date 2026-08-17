@@ -76,7 +76,7 @@ case "$ACTION" in
         }
 
         chmod 755 "$EXT_DIR/install.sh" "$EXT_DIR/bin/"*.sh "$RENDER_SRC"
-        chmod 644 "$JOB_SRC" "$EXT_DIR/update.conf.example" "$EXT_DIR/menu.json"
+        chmod 644 "$JOB_SRC" "$EXT_DIR/update.conf.example" "$EXT_DIR/config.xml" "$EXT_DIR/menu.json"
         mkdir -p "$EXT_DIR/logs" "$STATE_DIR"
         chmod 700 "$STATE_DIR"
 
