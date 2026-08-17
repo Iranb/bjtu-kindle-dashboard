@@ -113,6 +113,8 @@ The default deployment target is:
 ```
 
 The command then runs the installed native screen hook's `render-panel.sh`.
+In portrait mode, that hook renders the clock and date explicitly in China
+Standard Time (UTC+8), independent of the Kindle system timezone.
 Override either path with `--remote-image` and `--remote-render`.
 
 ## Install scheduled updates

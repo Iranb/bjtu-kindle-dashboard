@@ -216,6 +216,13 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn('if [ "$ORIENTATION" = "portrait" ]', hook)
         self.assertNotIn("fbdepth", hook)
 
+    def test_portrait_clock_uses_explicit_utc_plus_eight(self) -> None:
+        hook = (UPDATER / "integration" / "render-panel.sh").read_text("utf-8")
+        self.assertIn('LOCKSCREEN_TZ="CST-8"', hook)
+        self.assertIn('TZ="$LOCKSCREEN_TZ" date \'+%H:%M\'', hook)
+        self.assertIn('TZ="$LOCKSCREEN_TZ" LC_ALL=C date', hook)
+        self.assertNotIn("TIME_TEXT=$(date '+%H:%M')", hook)
+
     def test_published_panel_asset_matches_the_device_contract(self) -> None:
         for name in ("panel-base.png", "panel-base-right.png"):
             with self.subTest(name=name):

@@ -9,6 +9,9 @@ ORIENTATION_FILE="/var/local/bjtu-dashboard/orientation"
 FBINK="/mnt/us/usbnet/bin/fbink"
 FONT_REGULAR="/usr/java/lib/fonts/Helvetica_LT_65_Medium.ttf"
 FONT_BOLD="/usr/java/lib/fonts/Helvetica_LT_75_Bold.ttf"
+# Keep the lock-screen clock in China Standard Time even when the Kindle's
+# system clock is configured for UTC. POSIX TZ offsets have the opposite sign.
+LOCKSCREEN_TZ="CST-8"
 
 for CANDIDATE in \
     /mnt/us/usbnet/bin/fbink \
@@ -51,8 +54,8 @@ if [ "$ORIENTATION" = "portrait" ]; then
             "$TEXT" >/dev/null 2>&1
     }
 
-    TIME_TEXT=$(date '+%H:%M')
-    DATE_TEXT=$(LC_ALL=C date '+%a . %b %d' | tr '[:lower:]' '[:upper:]' | sed 's/ 0/ /')
+    TIME_TEXT=$(TZ="$LOCKSCREEN_TZ" date '+%H:%M')
+    DATE_TEXT=$(TZ="$LOCKSCREEN_TZ" LC_ALL=C date '+%a . %b %d' | tr '[:lower:]' '[:upper:]' | sed 's/ 0/ /')
     BATTERY=$(lipc-get-prop com.lab126.powerd battLevel 2>/dev/null)
     case "$BATTERY" in
         ''|*[!0-9]*) BATTERY="--" ;;
