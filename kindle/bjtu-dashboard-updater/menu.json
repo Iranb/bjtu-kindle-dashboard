@@ -21,6 +21,10 @@
           "action": "bin/control.sh fetch-now"
         },
         {
+          "name": "Toggle portrait / right 90 degrees",
+          "action": "bin/control.sh orientation toggle"
+        },
+        {
           "name": "Display: portrait",
           "action": "bin/control.sh orientation portrait"
         },

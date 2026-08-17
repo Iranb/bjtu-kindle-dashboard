@@ -213,6 +213,11 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn('portrait|right)', control)
         self.assertIn('orientation portrait', menu)
         self.assertIn('orientation right', menu)
+        self.assertIn('orientation toggle', menu)
+        self.assertIn('toggle_orientation()', control)
+        self.assertIn('right) set_orientation portrait', control)
+        self.assertIn('*) set_orientation right', control)
+        self.assertIn('portrait|right) CURRENT_ORIENTATION=', control)
         self.assertIn('if [ "$ORIENTATION" = "portrait" ]', hook)
         self.assertNotIn("fbdepth", hook)
 

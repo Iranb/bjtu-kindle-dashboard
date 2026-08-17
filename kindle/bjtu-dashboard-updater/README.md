@@ -54,6 +54,7 @@ Useful commands:
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh fetch-now
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation portrait
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation right
+/mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh orientation toggle
 /mnt/us/extensions/bjtu-dashboard-updater/bin/control.sh disable
 ```
 
