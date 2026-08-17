@@ -12,6 +12,10 @@ Install it after `bjtu-native-screensaver`:
 /bin/sh /mnt/us/extensions/bjtu-dashboard-updater/install.sh install
 ```
 
+KUAL discovers this extension through `config.xml`, which registers the
+dynamic `menu.json`. Reopen KUAL after first deployment so it rescans the
+extensions directory.
+
 The installer creates a separate Upstart service and stores private curl options in
 `/var/local/bjtu-dashboard/curl.conf` with mode `0600`. `update.conf` is USB-visible
 and must never contain a token. The root service parses it as data rather than shell:

@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 from PIL import Image
 
@@ -45,6 +46,7 @@ class KindleUpdaterTests(unittest.TestCase):
             "upstart/bjtu-dashboard-updater.conf",
             "update.conf.example",
             "install.sh",
+            "config.xml",
             "menu.json",
             "integration/render-panel.sh",
         ]
@@ -198,6 +200,17 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn("?ref=main", config)
         self.assertNotIn("authorization:", config)
         self.assertNotIn("bearer ", config)
+
+    def test_kual_manifest_registers_the_dynamic_menu(self) -> None:
+        root = ET.parse(UPDATER / "config.xml").getroot()
+        self.assertEqual(root.tag, "extension")
+        self.assertEqual(root.findtext("information/id"), "bjtu-dashboard-updater")
+        menu = root.find("menus/menu")
+        self.assertIsNotNone(menu)
+        assert menu is not None
+        self.assertEqual(menu.attrib.get("type"), "json")
+        self.assertEqual(menu.attrib.get("dynamic"), "true")
+        self.assertEqual(menu.text, "menu.json")
 
     def test_deployer_targets_the_independent_extension(self) -> None:
         deployer = (ROOT / "scripts" / "deploy_kindle_updater.py").read_text("utf-8")
