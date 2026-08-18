@@ -32,7 +32,7 @@ DEFAULT_PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 RUNTIME_SCRIPTS = (
     "update_dashboard.py",
     "apple_calendar_agenda.py",
-    "apple_calendar_reader.js",
+    "apple_calendar_eventkit.swift",
     "sync_hpc_widget.py",
     "publish_kindle_live.py",
     "publish_kindle_ssh.py",
@@ -48,11 +48,11 @@ CALENDAR_HELPER_ID = "com.iranb.bjtu-kindle-calendar-reader"
 
 
 def install_calendar_helper(app_dir: Path) -> Path:
-    source = app_dir / "apple_calendar_reader.js"
+    source = app_dir / "apple_calendar_eventkit.swift"
     helper = app_dir / "AppleCalendarAgendaReader.app"
     marker = app_dir / ".calendar-helper-source.sha256"
     source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
-    executable = helper / "Contents" / "MacOS" / "applet"
+    executable = helper / "Contents" / "MacOS" / "AppleCalendarAgendaReader"
     if executable.is_file() and marker.is_file():
         if marker.read_text(encoding="ascii").strip() == source_hash:
             return executable
@@ -62,38 +62,50 @@ def install_calendar_helper(app_dir: Path) -> Path:
     backup = app_dir / f".{helper.name}.previous"
     try:
         build_root.mkdir(mode=0o700)
+        built_executable = built / "Contents" / "MacOS" / "AppleCalendarAgendaReader"
+        built_executable.parent.mkdir(parents=True, mode=0o700)
         subprocess.run(
-            ["/usr/bin/osacompile", "-l", "JavaScript", "-o", str(built), str(source)],
+            [
+                "/usr/bin/xcrun",
+                "swiftc",
+                "-parse-as-library",
+                str(source),
+                "-o",
+                str(built_executable),
+                "-framework",
+                "Foundation",
+                "-framework",
+                "EventKit",
+            ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         info = built / "Contents" / "Info.plist"
-        subprocess.run(
-            [
-                "/usr/bin/plutil",
-                "-replace",
-                "CFBundleIdentifier",
-                "-string",
-                CALENDAR_HELPER_ID,
-                str(info),
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        subprocess.run(
-            [
-                "/usr/bin/plutil",
-                "-replace",
-                "NSAppleEventsUsageDescription",
-                "-string",
-                "Read a bounded Apple Calendar month view for the private Kindle lock screen.",
-                str(info),
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        write_atomic(
+            info,
+            plistlib.dumps(
+                {
+                    "CFBundleDevelopmentRegion": "en",
+                    "CFBundleExecutable": "AppleCalendarAgendaReader",
+                    "CFBundleIdentifier": CALENDAR_HELPER_ID,
+                    "CFBundleInfoDictionaryVersion": "6.0",
+                    "CFBundleName": "Apple Calendar Agenda Reader",
+                    "CFBundlePackageType": "APPL",
+                    "CFBundleShortVersionString": "1.0",
+                    "CFBundleVersion": "1",
+                    "LSMinimumSystemVersion": "13.0",
+                    "LSUIElement": True,
+                    "NSCalendarsFullAccessUsageDescription": (
+                        "Read a bounded calendar month view for the private Kindle lock screen."
+                    ),
+                    "NSCalendarsUsageDescription": (
+                        "Read a bounded calendar month view for the private Kindle lock screen."
+                    ),
+                },
+                fmt=plistlib.FMT_XML,
+                sort_keys=True,
+            ),
         )
         subprocess.run(
             [
@@ -125,17 +137,26 @@ def install_calendar_helper(app_dir: Path) -> Path:
     finally:
         if build_root.exists():
             shutil.rmtree(build_root)
-    return helper / "Contents" / "MacOS" / "applet"
+    return helper / "Contents" / "MacOS" / "AppleCalendarAgendaReader"
 
 
 def probe_calendar_access(python: Path, app_dir: Path) -> None:
     result = subprocess.run(
-        [str(python), str(app_dir / "apple_calendar_agenda.py"), "--hours", "24", "--max-events", "5"],
+        [
+            str(python),
+            str(app_dir / "apple_calendar_agenda.py"),
+            "--hours",
+            "24",
+            "--max-events",
+            "5",
+            "--timeout",
+            "90",
+        ],
         check=False,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=30,
+        timeout=100,
         env={
             "HOME": str(Path.home()),
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
@@ -286,6 +307,9 @@ def install(args: argparse.Namespace) -> None:
         if not source.is_file():
             raise InstallError(f"missing runtime source: {source}")
         shutil.copy2(source, app_dir / name)
+    # Remove the retired JXA reader so the runtime cannot fall back to launching
+    # Calendar.app through Apple Events.
+    (app_dir / "apple_calendar_reader.js").unlink(missing_ok=True)
     requirements = ROOT / "requirements.txt"
     shutil.copy2(requirements, app_dir / "requirements.txt")
 

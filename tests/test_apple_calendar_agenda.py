@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 
@@ -16,6 +17,15 @@ SPEC.loader.exec_module(MODULE)
 
 
 class AppleCalendarAgendaTests(unittest.TestCase):
+    def eventkit_runner(self, payload, returncode=0, stderr=""):
+        def runner(command, **kwargs):
+            self.assertNotIn("osascript", " ".join(command))
+            output = Path(kwargs["env"]["BJTU_CALENDAR_OUTPUT"])
+            output.write_text(payload, encoding="utf-8")
+            return subprocess.CompletedProcess(command, returncode, "", stderr)
+
+        return runner
+
     def test_query_returns_only_bounded_minimal_fields(self) -> None:
         now = datetime(2026, 8, 18, 1, 0, tzinfo=timezone.utc)
         rows = [
@@ -29,21 +39,24 @@ class AppleCalendarAgendaTests(unittest.TestCase):
             }
         ]
 
-        def runner(*_args, **_kwargs):
-            return subprocess.CompletedProcess([], 0, json.dumps(rows), "")
-
-        agenda = MODULE.query_apple_calendar(now=now, runner=runner)
+        agenda = MODULE.query_apple_calendar(
+            now=now,
+            runner=self.eventkit_runner(json.dumps(rows)),
+            helper_executable=ROOT / "scripts/apple_calendar_eventkit.swift",
+        )
         self.assertEqual(len(agenda), 1)
         self.assertEqual(set(agenda[0]), {"title", "start", "end", "all_day"})
         self.assertEqual(agenda[0]["title"], "Group meeting")
         self.assertNotIn("must-not-survive", json.dumps(agenda))
 
     def test_query_failure_does_not_echo_calendar_content(self) -> None:
-        def runner(*_args, **_kwargs):
-            return subprocess.CompletedProcess([], 1, "", "private event title")
-
         with self.assertRaises(MODULE.CalendarError) as raised:
-            MODULE.query_apple_calendar(runner=runner)
+            MODULE.query_apple_calendar(
+                runner=self.eventkit_runner(
+                    "", returncode=1, stderr="private event title"
+                ),
+                helper_executable=ROOT / "scripts/apple_calendar_eventkit.swift",
+            )
         self.assertNotIn("private event title", str(raised.exception))
 
     def test_normalizer_deduplicates_and_rejects_outside_window(self) -> None:
@@ -71,15 +84,13 @@ class AppleCalendarAgendaTests(unittest.TestCase):
     def test_month_range_is_bounded_to_six_weeks(self) -> None:
         start = datetime(2026, 7, 26, tzinfo=timezone.utc)
 
-        def runner(*_args, **_kwargs):
-            return subprocess.CompletedProcess([], 0, "[]", "")
-
         self.assertEqual(
             MODULE.query_apple_calendar_range(
                 start=start,
                 end=start + timedelta(days=42),
                 max_events=84,
-                runner=runner,
+                runner=self.eventkit_runner("[]"),
+                helper_executable=ROOT / "scripts/apple_calendar_eventkit.swift",
             ),
             [],
         )
@@ -87,8 +98,16 @@ class AppleCalendarAgendaTests(unittest.TestCase):
             MODULE.query_apple_calendar_range(
                 start=start,
                 end=start + timedelta(days=46),
-                runner=runner,
+                runner=self.eventkit_runner("[]"),
+                helper_executable=ROOT / "scripts/apple_calendar_eventkit.swift",
             )
+
+    def test_missing_eventkit_helper_fails_without_jxa_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            missing = Path(temporary) / "missing-helper"
+            with self.assertRaises(MODULE.CalendarError) as raised:
+                MODULE.query_apple_calendar(helper_executable=missing)
+        self.assertIn("EventKit helper is unavailable", str(raised.exception))
 
 
 if __name__ == "__main__":

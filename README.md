@@ -109,6 +109,10 @@ are published to the SSH edge. Its Apple-inspired six-week month grid reads at
 most 84 overlapping events and retains only title, time, and the all-day flag;
 locations, attendees, notes, calendar names, and raw Calendar JSON are excluded.
 Calendar images are never sent to the public Git publisher.
+The signed background helper reads through EventKit, not Apple Events, so
+scheduled refreshes do not launch Calendar.app. macOS labels the required
+EventKit permission as full calendar access; the helper itself implements a
+read-only query path and never creates, edits, or deletes events.
 
 Enable both orientations and the protected month-view variants in the Mac service:
 

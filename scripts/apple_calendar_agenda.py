@@ -18,38 +18,6 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 
-JXA_QUERY = r"""
-function run(argv) {
-  const calendar = Application("Calendar");
-  const start = new Date(argv[0]);
-  const end = new Date(argv[1]);
-  const rows = [];
-  for (const source of calendar.calendars()) {
-    let events = [];
-    try {
-      events = source.events.whose({_and: [
-        {startDate: {_lessThan: end}},
-        {endDate: {_greaterThan: start}}
-      ]})();
-    } catch (error) {
-      continue;
-    }
-    for (const event of events) {
-      try {
-        rows.push({
-          title: String(event.summary() || ""),
-          start: event.startDate().toISOString(),
-          end: event.endDate().toISOString(),
-          all_day: Boolean(event.alldayEvent())
-        });
-      } catch (error) {}
-    }
-  }
-  return JSON.stringify(rows);
-}
-"""
-
-
 class CalendarError(RuntimeError):
     """Raised when Calendar cannot produce a safe agenda."""
 
@@ -60,7 +28,7 @@ HELPER_EXECUTABLE = (
     / "AppleCalendarAgendaReader.app"
     / "Contents"
     / "MacOS"
-    / "applet"
+    / "AppleCalendarAgendaReader"
 )
 
 
@@ -128,6 +96,7 @@ def query_apple_calendar(
     max_events: int = 5,
     timeout: int = 20,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    helper_executable: Path = HELPER_EXECUTABLE,
 ) -> list[dict[str, Any]]:
     if hours < 1 or hours > 168:
         raise CalendarError("calendar window must be 1..168 hours")
@@ -141,6 +110,7 @@ def query_apple_calendar(
         max_events=max_events,
         timeout=timeout,
         runner=runner,
+        helper_executable=helper_executable,
     )
 
 
@@ -151,6 +121,7 @@ def query_apple_calendar_range(
     max_events: int = 84,
     timeout: int = 20,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    helper_executable: Path = HELPER_EXECUTABLE,
 ) -> list[dict[str, Any]]:
     """Read an explicit, bounded range suitable for a six-week month grid."""
 
@@ -160,54 +131,39 @@ def query_apple_calendar_range(
         raise CalendarError("calendar range must be positive and at most 45 days")
     if max_events < 1 or max_events > 84:
         raise CalendarError("calendar event limit must be 1..84")
+    if timeout < 1 or timeout > 120:
+        raise CalendarError("calendar query timeout must be 1..120 seconds")
+    if not helper_executable.is_file():
+        raise CalendarError("Apple Calendar EventKit helper is unavailable")
     output_path: Path | None = None
     try:
-        if HELPER_EXECUTABLE.is_file():
-            temporary_dir = SCRIPT_DIR.parent / "tmp"
-            temporary_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-            os.chmod(temporary_dir, 0o700)
-            descriptor, output_name = tempfile.mkstemp(
-                prefix=".calendar-query.", dir=temporary_dir
-            )
-            os.close(descriptor)
-            output_path = Path(output_name)
-            os.chmod(output_path, 0o600)
-            environment = os.environ.copy()
-            environment.update(
-                {
-                    "BJTU_CALENDAR_START": start.isoformat(),
-                    "BJTU_CALENDAR_END": end.isoformat(),
-                    "BJTU_CALENDAR_OUTPUT": str(output_path),
-                }
-            )
-            result = runner(
-                [str(HELPER_EXECUTABLE)],
-                check=False,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=timeout,
-                env=environment,
-            )
-            raw_response = output_path.read_text(encoding="utf-8")
-        else:
-            result = runner(
-                [
-                    "/usr/bin/osascript",
-                    "-l",
-                    "JavaScript",
-                    "-e",
-                    JXA_QUERY,
-                    start.isoformat(),
-                    end.isoformat(),
-                ],
-                check=False,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=timeout,
-            )
-            raw_response = result.stdout
+        temporary_dir = SCRIPT_DIR.parent / "tmp"
+        temporary_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(temporary_dir, 0o700)
+        descriptor, output_name = tempfile.mkstemp(
+            prefix=".calendar-query.", dir=temporary_dir
+        )
+        os.close(descriptor)
+        output_path = Path(output_name)
+        os.chmod(output_path, 0o600)
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "BJTU_CALENDAR_START": start.isoformat(),
+                "BJTU_CALENDAR_END": end.isoformat(),
+                "BJTU_CALENDAR_OUTPUT": str(output_path),
+            }
+        )
+        result = runner(
+            [str(helper_executable)],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            env=environment,
+        )
+        raw_response = output_path.read_text(encoding="utf-8")
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise CalendarError("Apple Calendar query was unavailable") from exc
     finally:
@@ -229,9 +185,14 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hours", type=int, default=24)
     parser.add_argument("--max-events", type=int, default=5)
+    parser.add_argument("--timeout", type=int, default=20)
     args = parser.parse_args(argv)
     try:
-        agenda = query_apple_calendar(hours=args.hours, max_events=args.max_events)
+        agenda = query_apple_calendar(
+            hours=args.hours,
+            max_events=args.max_events,
+            timeout=args.timeout,
+        )
     except CalendarError as exc:
         print(f"error: {exc}")
         return 1
