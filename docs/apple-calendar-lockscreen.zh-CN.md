@@ -29,7 +29,7 @@ Kindle 的 KUAL 菜单提供显式按钮，用户可以随时在 HPC 仪表盘�
 
 ```text
 Apple Calendar.app
-  → Mac 本地受授权 helper/JXA，只读取当月 6 周网格覆盖的最多 42 天
+  → Mac 本地受授权 EventKit helper，只读取当月 6 周网格覆盖的最多 42 天
   → 仅保留标题、开始/结束时间、全天标记，最多 84 条
   → 在内存中生成独立的日历灰度 PNG（不渲染 HPC 内容）
   → SSH 原子上传最终 PNG；不上传日历 JSON
@@ -59,7 +59,9 @@ Mac 每 300 秒运行一次，也会在 HPC 快照变化时被唤起。日历内
 
 ## Mac 端
 
-首次启用时，macOS 可能显示 Calendar 自动化权限提示。允许后可运行不输出标题的探测：
+首次启用时，macOS 会显示一次“日历完全访问”权限提示。EventKit 没有只读授权等级，
+但本 helper 的代码路径只查询事件，绝不创建、修改或删除事件。它以后台 accessory app
+运行，不通过 Apple Events，也不会启动 Calendar.app。允许后可运行不输出标题的探测：
 
 ```bash
 python3 scripts/apple_calendar_agenda.py --hours 24 --max-events 5

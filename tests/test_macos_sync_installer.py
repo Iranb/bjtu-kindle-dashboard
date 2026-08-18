@@ -138,6 +138,21 @@ class MacOSSyncInstallerTests(unittest.TestCase):
                 ]
             )
 
+    def test_calendar_helper_uses_eventkit_without_apple_events(self) -> None:
+        installer = (ROOT / "scripts/install_macos_hpc_sync.py").read_text("utf-8")
+        reader = (ROOT / "scripts/apple_calendar_eventkit.swift").read_text("utf-8")
+        agenda = (ROOT / "scripts/apple_calendar_agenda.py").read_text("utf-8")
+        self.assertIn('"EventKit"', installer)
+        self.assertIn("NSCalendarsFullAccessUsageDescription", installer)
+        self.assertIn("LSUIElement", installer)
+        self.assertIn("EKEventStore", reader)
+        self.assertIn("requestFullAccessToEvents", reader)
+        self.assertIn('"--timeout",\n            "90"', installer)
+        self.assertNotIn("osacompile", installer)
+        self.assertNotIn("NSAppleEventsUsageDescription", installer)
+        self.assertNotIn("osascript", agenda)
+        self.assertNotIn('Application("Calendar")', agenda)
+
 
 if __name__ == "__main__":
     unittest.main()
