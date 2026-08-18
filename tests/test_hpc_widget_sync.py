@@ -154,6 +154,41 @@ class HPCWidgetSyncTests(unittest.TestCase):
                 self.assertEqual(image.size, (1072, 1448))
                 self.assertEqual(image.mode, "L")
 
+    def test_calendar_variant_renders_without_persisting_event_titles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshot_path = root / "snapshot.json"
+            image_path = root / "panel-calendar.png"
+            data_path = root / "dashboard.json"
+            state_path = root / "state.json"
+            snapshot_path.write_text(json.dumps(sample_snapshot()), encoding="utf-8")
+            args = MODULE.parse_args(
+                [
+                    "--snapshot", str(snapshot_path),
+                    "--image-output", str(image_path),
+                    "--data-output", str(data_path),
+                    "--state-file", str(state_path),
+                    "--orientation", "right",
+                ]
+            )
+            now = datetime.now(timezone.utc)
+            args.agenda = [
+                {
+                    "title": "Private calendar title",
+                    "start": (now + timedelta(hours=1)).isoformat(),
+                    "end": (now + timedelta(hours=2)).isoformat(),
+                    "all_day": False,
+                }
+            ]
+            receipt = MODULE.sync_once(args)
+            self.assertTrue(receipt["calendar_mode"])
+            self.assertEqual(receipt["agenda_event_count"], 1)
+            self.assertNotIn("Private calendar title", data_path.read_text("utf-8"))
+            self.assertNotIn("Private calendar title", state_path.read_text("utf-8"))
+            with Image.open(image_path) as image:
+                self.assertEqual(image.size, (1072, 1448))
+                self.assertEqual(image.mode, "L")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,10 @@ from publish_kindle_live import PublishError, validate_image
 
 DEFAULT_REMOTE_PATH = ".local/share/bjtu-kindle-edge/www/panel-base.png"
 DEFAULT_REMOTE_RIGHT_PATH = ".local/share/bjtu-kindle-edge/www/panel-base-right.png"
+DEFAULT_REMOTE_CALENDAR_PATH = ".local/share/bjtu-kindle-edge/www/panel-calendar.png"
+DEFAULT_REMOTE_CALENDAR_RIGHT_PATH = (
+    ".local/share/bjtu-kindle-edge/www/panel-calendar-right.png"
+)
 
 
 def validate_target(target: str) -> str:

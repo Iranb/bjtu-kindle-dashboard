@@ -8,9 +8,10 @@ import hashlib
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 from PIL import Image
 
@@ -34,6 +35,8 @@ DEFAULT_SNAPSHOT = (
     / "snapshot.json"
 )
 DEFAULT_ACCOUNT_LABELS = tuple(f"ACCOUNT {letter}" for letter in "ABCDEF")
+LOCKSCREEN_TIMEZONE = ZoneInfo("Asia/Shanghai")
+RENDER_SCHEMA_VERSION = 4
 
 
 class SyncError(RuntimeError):
@@ -232,6 +235,53 @@ def canonical_digest(value: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def agenda_for_display(
+    agenda: list[dict[str, Any]], now: datetime | None = None
+) -> list[dict[str, Any]]:
+    local_now = (now or datetime.now(timezone.utc)).astimezone(LOCKSCREEN_TIMEZONE)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    grid_start = month_start - timedelta(days=(month_start.weekday() + 1) % 7)
+    grid_end = grid_start + timedelta(days=42)
+    output: list[dict[str, Any]] = []
+    for event in agenda[:84]:
+        start = parse_timestamp(event.get("start"))
+        end = parse_timestamp(event.get("end"))
+        if start is None or end is None or end <= start:
+            raise SyncError("calendar event has invalid timestamps")
+        local_start = start.astimezone(LOCKSCREEN_TIMEZONE)
+        local_end = end.astimezone(LOCKSCREEN_TIMEZONE)
+        title = str(event.get("title") or "UNTITLED EVENT").strip()
+        if not title:
+            title = "UNTITLED EVENT"
+        first_day = max(local_start.date(), grid_start.date())
+        last_day = min(
+            (local_end - timedelta(microseconds=1)).date(),
+            (grid_end - timedelta(days=1)).date(),
+        )
+        day = first_day
+        while day <= last_day:
+            is_all_day = bool(event.get("all_day"))
+            display_time = "" if is_all_day or day != local_start.date() else local_start.strftime("%H:%M")
+            output.append(
+                {
+                    "date": day.isoformat(),
+                    "title": title[:80],
+                    "time": display_time,
+                    "all_day": is_all_day,
+                }
+            )
+            day += timedelta(days=1)
+    output.sort(
+        key=lambda item: (
+            item["date"],
+            not item["all_day"],
+            item["time"],
+            item["title"],
+        )
+    )
+    return output
+
+
 def file_digest(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -254,12 +304,18 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
 
 
 def render_atomic(
-    path: Path, dashboard: dict[str, Any], orientation: str = "portrait"
+    path: Path,
+    dashboard: dict[str, Any],
+    orientation: str = "portrait",
+    agenda: list[dict[str, Any]] | None = None,
+    calendar_date: str | None = None,
 ) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
     try:
-        image = render_dashboard(dashboard, "blank", orientation)
+        image = render_dashboard(
+            dashboard, "blank", orientation, agenda, calendar_date
+        )
         image.save(temporary, format="PNG", optimize=True)
         with Image.open(temporary) as verified:
             if verified.size != (WIDTH, HEIGHT) or verified.mode != "L":
@@ -282,8 +338,22 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
         account_labels=tuple(args.account_label),
         max_age_seconds=args.max_source_age,
     )
+    raw_agenda = getattr(args, "agenda", None)
+    display_agenda = None if raw_agenda is None else agenda_for_display(raw_agenda)
+    calendar_date = (
+        None
+        if display_agenda is None
+        else datetime.now(timezone.utc).astimezone(LOCKSCREEN_TIMEZONE).date().isoformat()
+    )
     semantic_sha256 = canonical_digest(
-        {"dashboard": dashboard, "orientation": args.orientation}
+        {
+            "render_schema": RENDER_SCHEMA_VERSION,
+            "dashboard": dashboard,
+            "orientation": args.orientation,
+            "calendar_mode": display_agenda is not None,
+            "agenda": display_agenda,
+            "calendar_date": calendar_date,
+        }
     )
     previous_state: dict[str, Any] = {}
     if args.state_file.is_file():
@@ -299,7 +369,13 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
     )
     atomic_write_json(args.data_output, dashboard)
     if should_render:
-        image_sha256 = render_atomic(args.image_output, dashboard, args.orientation)
+        image_sha256 = render_atomic(
+            args.image_output,
+            dashboard,
+            args.orientation,
+            display_agenda,
+            calendar_date,
+        )
     else:
         image_sha256 = file_digest(args.image_output)
 
@@ -312,6 +388,8 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
         "image_sha256": image_sha256,
         "stale": "STALE" in dashboard["cluster"]["subtitle"],
         "orientation": args.orientation,
+        "calendar_mode": display_agenda is not None,
+        "agenda_event_count": len(display_agenda or []),
     }
     atomic_write_json(args.state_file, state)
     return {
@@ -323,6 +401,8 @@ def sync_once(args: argparse.Namespace) -> dict[str, Any]:
         "stale": state["stale"],
         "source_checked_at": state["source_checked_at"],
         "orientation": args.orientation,
+        "calendar_mode": display_agenda is not None,
+        "agenda_event_count": len(display_agenda or []),
     }
 
 

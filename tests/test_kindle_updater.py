@@ -25,7 +25,8 @@ class KindleUpdaterTests(unittest.TestCase):
                         '. "$1"; CONFIG_FILE=$2; load_config || exit $?; '
                         "printf '%s\\n' \"$UPDATE_URL\" \"$BATTERY_INTERVAL_SECONDS\" "
                         '"$LOW_BATTERY_PERCENT" "$ALLOW_HTTP" "$DISPLAY_ORIENTATION" '
-                        '"$UPDATE_URL_RIGHT"'
+                        '"$UPDATE_URL_RIGHT" "$DISPLAY_CONTENT_MODE" '
+                        '"$UPDATE_URL_CALENDAR" "$UPDATE_URL_CALENDAR_RIGHT"'
                     ),
                     "sh",
                     str(common),
@@ -98,11 +99,10 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn(
             'write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION"', fetcher
         )
-        self.assertIn(
-            '[ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ] && [ -f "$ETAG_FILE" ]',
-            fetcher,
-        )
+        self.assertIn('[ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ]', fetcher)
+        self.assertIn('[ "$CURRENT_CONTENT_MODE" = "$DISPLAY_CONTENT_MODE" ]', fetcher)
         self.assertIn('fail "orientation_not_refetched"', fetcher)
+        self.assertIn('fail "content_mode_not_refetched"', fetcher)
 
     def test_usb_config_is_parsed_as_whitelisted_data(self) -> None:
         common = (UPDATER / "bin" / "common.sh").read_text("utf-8")
@@ -117,6 +117,9 @@ class KindleUpdaterTests(unittest.TestCase):
             "LOW_BATTERY_PERCENT=15\n"
             "ALLOW_HTTP=0\n"
             "DISPLAY_ORIENTATION=right\n"
+            "DISPLAY_CONTENT_MODE=calendar\n"
+            "UPDATE_URL_CALENDAR=https://example.invalid/calendar.png\n"
+            "UPDATE_URL_CALENDAR_RIGHT=https://example.invalid/calendar-right.png\n"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
@@ -128,6 +131,9 @@ class KindleUpdaterTests(unittest.TestCase):
                 "0",
                 "right",
                 "https://api.github.com/repos/example/project/contents/panel-right.png?ref=main",
+                "calendar",
+                "https://example.invalid/calendar.png",
+                "https://example.invalid/calendar-right.png",
             ],
         )
 
@@ -146,6 +152,8 @@ class KindleUpdaterTests(unittest.TestCase):
             "KEEP_AWAKE_GRACE_SECONDS=120\nKEEP_AWAKE_RENEW_SECONDS=120\n",
             "DISPLAY_ORIENTATION=left\n",
             "DISPLAY_ORIENTATION=right;touch-marker\n",
+            "DISPLAY_CONTENT_MODE=private\n",
+            "DISPLAY_CONTENT_MODE=calendar;touch-marker\n",
         ]
         for config in invalid_configs:
             with self.subTest(config=config):
@@ -240,6 +248,23 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn('TZ="$LOCKSCREEN_TZ" date \'+%H:%M\'', hook)
         self.assertIn('TZ="$LOCKSCREEN_TZ" LC_ALL=C date', hook)
         self.assertNotIn("TIME_TEXT=$(date '+%H:%M')", hook)
+
+    def test_kual_calendar_toggle_is_strict_and_uses_protected_urls(self) -> None:
+        common = (UPDATER / "bin" / "common.sh").read_text("utf-8")
+        control = (UPDATER / "bin" / "control.sh").read_text("utf-8")
+        fetcher = (UPDATER / "bin" / "fetch-panel.sh").read_text("utf-8")
+        menu = (UPDATER / "menu.json").read_text("utf-8")
+        self.assertIn("DISPLAY_CONTENT_MODE", common)
+        self.assertIn("dashboard|calendar)", common)
+        self.assertIn("calendar toggle", menu)
+        self.assertIn("calendar on", menu)
+        self.assertIn("calendar off", menu)
+        self.assertIn("Toggle HPC / Apple Calendar", menu)
+        self.assertIn("Lock screen: Apple Calendar", menu)
+        self.assertIn("Lock screen: HPC dashboard", menu)
+        self.assertIn("toggle_content_mode()", control)
+        self.assertIn("UPDATE_URL_CALENDAR", fetcher)
+        self.assertIn("UPDATE_URL_CALENDAR_RIGHT", fetcher)
 
     def test_published_panel_asset_matches_the_device_contract(self) -> None:
         for name in ("panel-base.png", "panel-base-right.png"):

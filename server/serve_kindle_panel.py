@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import os
+import re
 import ssl
+import stat
 import struct
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -66,10 +69,17 @@ def make_handler(
     panel_path: Path,
     max_bytes: int,
     right_panel_path: Optional[Path] = None,
+    calendar_panel_path: Optional[Path] = None,
+    calendar_right_panel_path: Optional[Path] = None,
+    calendar_token: Optional[str] = None,
 ) -> type[BaseHTTPRequestHandler]:
-    routes = {"/panel-base.png": panel_path}
+    routes: dict[str, tuple[Path, bool]] = {"/panel-base.png": (panel_path, False)}
     if right_panel_path is not None:
-        routes["/panel-base-right.png"] = right_panel_path
+        routes["/panel-base-right.png"] = (right_panel_path, False)
+    if calendar_panel_path is not None:
+        routes["/panel-calendar.png"] = (calendar_panel_path, True)
+    if calendar_right_panel_path is not None:
+        routes["/panel-calendar-right.png"] = (calendar_right_panel_path, True)
 
     class PanelHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -105,8 +115,16 @@ def make_handler(
             if selected is None:
                 self._plain(404, b"not found\n", head_only)
                 return
+            panel_path_for_route, needs_calendar_auth = selected
+            if needs_calendar_auth:
+                expected = f"Bearer {calendar_token or ''}"
+                supplied = self.headers.get("Authorization", "")
+                if not calendar_token or not hmac.compare_digest(supplied, expected):
+                    # Do not disclose whether a protected calendar route exists.
+                    self._plain(404, b"not found\n", head_only)
+                    return
             try:
-                panel = read_panel(selected, max_bytes)
+                panel = read_panel(panel_path_for_route, max_bytes)
             except PanelError:
                 self._plain(503, b"panel unavailable\n", head_only)
                 return
@@ -136,10 +154,26 @@ def make_handler(
     return PanelHandler
 
 
+def read_calendar_token(path: Path) -> str:
+    try:
+        metadata = path.stat()
+        token = path.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError) as exc:
+        raise PanelError("cannot read calendar token") from exc
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o077:
+        raise PanelError("calendar token file must be private")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", token):
+        raise PanelError("calendar token is invalid")
+    return token
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--panel", type=Path, required=True)
     parser.add_argument("--right-panel", type=Path)
+    parser.add_argument("--calendar-panel", type=Path)
+    parser.add_argument("--calendar-right-panel", type=Path)
+    parser.add_argument("--calendar-token-file", type=Path)
     parser.add_argument("--cert", type=Path, required=True)
     parser.add_argument("--key", type=Path, required=True)
     parser.add_argument("--bind", default="0.0.0.0")
@@ -158,9 +192,30 @@ def main(argv: Iterable[str] | None = None) -> int:
     read_panel(args.panel, args.max_image_bytes)
     if args.right_panel is not None:
         read_panel(args.right_panel, args.max_image_bytes)
+    calendar_paths = (args.calendar_panel, args.calendar_right_panel)
+    if any(path is not None for path in calendar_paths) and not all(
+        path is not None for path in calendar_paths
+    ):
+        raise SystemExit("calendar portrait and right panels must be configured together")
+    calendar_token = None
+    if all(path is not None for path in calendar_paths):
+        if args.calendar_token_file is None:
+            raise SystemExit("--calendar-token-file is required for calendar panels")
+        assert args.calendar_panel is not None
+        assert args.calendar_right_panel is not None
+        read_panel(args.calendar_panel, args.max_image_bytes)
+        read_panel(args.calendar_right_panel, args.max_image_bytes)
+        calendar_token = read_calendar_token(args.calendar_token_file)
     server = ThreadingHTTPServer(
         (args.bind, args.port),
-        make_handler(args.panel, args.max_image_bytes, args.right_panel),
+        make_handler(
+            args.panel,
+            args.max_image_bytes,
+            args.right_panel,
+            args.calendar_panel,
+            args.calendar_right_panel,
+            calendar_token,
+        ),
     )
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2

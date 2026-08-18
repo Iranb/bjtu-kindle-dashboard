@@ -101,6 +101,30 @@ reads the root-private active orientation and switches to the other validated
 panel, so a previously failed download cannot make the next toggle run in the
 wrong direction.
 
+## Apple Calendar month view
+
+The optional Apple Calendar mode is a standalone lock screen, separate from the
+HPC dashboard. Calendar access stays on the Mac and only final grayscale images
+are published to the SSH edge. Its Apple-inspired six-week month grid reads at
+most 84 overlapping events and retains only title, time, and the all-day flag;
+locations, attendees, notes, calendar names, and raw Calendar JSON are excluded.
+Calendar images are never sent to the public Git publisher.
+
+Enable both orientations and the protected month-view variants in the Mac service:
+
+```bash
+python3 scripts/install_macos_hpc_sync.py --install \
+  --ssh-target EDGE_ALIAS \
+  --publish-both \
+  --publish-calendar
+```
+
+The edge protects `/panel-calendar.png` and `/panel-calendar-right.png` with a
+Bearer value stored only in private runtime files. On Kindle, KUAL provides
+`Toggle HPC / Apple Calendar`, `Lock screen: Apple Calendar`, and
+`Lock screen: HPC dashboard`. See the
+[Apple Calendar lock-screen guide](docs/apple-calendar-lockscreen.zh-CN.md).
+
 ## Deploy to Kindle
 
 With an SSH alias such as `kindle` already configured:
@@ -170,6 +194,7 @@ normal suspend to resume. RTC tests always require the user to lock the device.
 - [Scheduled updates while suspended (简体中文)](docs/scheduled-sleep-updates.zh-CN.md)
 - [RTC wake and background Wi-Fi validation (简体中文)](docs/rtc-wifi-validation.zh-CN.md)
 - [Local HPC Widget to Kindle sync (简体中文)](docs/hpc-widget-sync.zh-CN.md)
+- [Apple Calendar lock-screen integration (简体中文)](docs/apple-calendar-lockscreen.zh-CN.md)
 - [Clockwise 90° lock-screen layout (简体中文)](docs/rotation-layout.zh-CN.md)
 
 All guides use placeholders for network addresses, local usernames and key

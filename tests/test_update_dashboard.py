@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from PIL import Image
 
@@ -41,6 +42,33 @@ class DashboardTests(unittest.TestCase):
         rendered = MODULE.render_dashboard(data, "data", "right")
         self.assertEqual(rendered.size, (1072, 1448))
         self.assertEqual(rendered.mode, "L")
+
+    def test_calendar_is_a_standalone_lock_screen(self):
+        data = MODULE.validate(copy.deepcopy(self.data))
+        agenda = [
+            {
+                "date": "2026-08-18",
+                "time": "",
+                "all_day": True,
+                "title": "Private event",
+            }
+        ]
+        with (
+            mock.patch.object(MODULE.Renderer, "capacity", side_effect=AssertionError),
+            mock.patch.object(MODULE.Renderer, "nodes", side_effect=AssertionError),
+            mock.patch.object(MODULE.Renderer, "accounts", side_effect=AssertionError),
+        ):
+            for orientation in ("portrait", "right"):
+                with self.subTest(orientation=orientation):
+                    rendered = MODULE.render_dashboard(
+                        data,
+                        "data",
+                        orientation,
+                        agenda,
+                        "2026-08-18",
+                    )
+                    self.assertEqual(rendered.size, (1072, 1448))
+                    self.assertEqual(rendered.mode, "L")
 
     def test_rejects_unknown_orientation(self):
         with self.assertRaises(MODULE.DashboardError):

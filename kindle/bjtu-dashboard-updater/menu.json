@@ -21,6 +21,18 @@
           "action": "bin/control.sh fetch-now"
         },
         {
+          "name": "Toggle HPC / Apple Calendar",
+          "action": "bin/control.sh calendar toggle"
+        },
+        {
+          "name": "Lock screen: Apple Calendar",
+          "action": "bin/control.sh calendar on"
+        },
+        {
+          "name": "Lock screen: HPC dashboard",
+          "action": "bin/control.sh calendar off"
+        },
+        {
           "name": "Toggle portrait / right 90 degrees",
           "action": "bin/control.sh orientation toggle"
         },
