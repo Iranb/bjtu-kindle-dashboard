@@ -1,55 +1,55 @@
 {
   "items": [
     {
-      "name": "BJTU Dashboard Updater",
+      "name": "BJTU Lock Screen Manager",
       "priority": 71,
       "items": [
         {
-          "name": "Enable scheduled updates",
+          "name": "Auto updates: enable",
           "action": "bin/control.sh enable"
         },
         {
-          "name": "Disable scheduled updates",
+          "name": "Auto updates: disable",
           "action": "bin/control.sh disable"
         },
         {
-          "name": "Restart updater",
+          "name": "Restart lock-screen service",
           "action": "bin/control.sh restart"
         },
         {
-          "name": "Fetch panel now",
+          "name": "Refresh lock screen now",
           "action": "bin/control.sh fetch-now"
         },
         {
-          "name": "Toggle HPC / Apple Calendar",
+          "name": "Switch: HPC / Apple Calendar",
           "action": "bin/control.sh calendar toggle"
         },
         {
-          "name": "Lock screen: Apple Calendar",
+          "name": "Show Apple Calendar",
           "action": "bin/control.sh calendar on"
         },
         {
-          "name": "Lock screen: HPC dashboard",
+          "name": "Show HPC dashboard",
           "action": "bin/control.sh calendar off"
         },
         {
-          "name": "Toggle portrait / right 90 degrees",
+          "name": "Rotate: portrait / right 90 degrees",
           "action": "bin/control.sh orientation toggle"
         },
         {
-          "name": "Display: portrait",
+          "name": "Orientation: portrait",
           "action": "bin/control.sh orientation portrait"
         },
         {
-          "name": "Display: right 90 degrees",
+          "name": "Orientation: right 90 degrees",
           "action": "bin/control.sh orientation right"
         },
         {
-          "name": "Updater status",
+          "name": "Lock-screen status",
           "action": "bin/control.sh status"
         },
         {
-          "name": "Uninstall updater",
+          "name": "Uninstall lock-screen manager",
           "action": "install.sh uninstall"
         }
       ]

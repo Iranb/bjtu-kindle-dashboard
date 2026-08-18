@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -213,6 +214,12 @@ class KindleUpdaterTests(unittest.TestCase):
         root = ET.parse(UPDATER / "config.xml").getroot()
         self.assertEqual(root.tag, "extension")
         self.assertEqual(root.findtext("information/id"), "bjtu-dashboard-updater")
+        self.assertEqual(
+            root.findtext("information/name"), "BJTU Lock Screen Manager"
+        )
+        self.assertEqual(root.findtext("information/version"), "1.1")
+        menu_data = json.loads((UPDATER / "menu.json").read_text("utf-8"))
+        self.assertEqual(menu_data["items"][0]["name"], "BJTU Lock Screen Manager")
         menu = root.find("menus/menu")
         self.assertIsNotNone(menu)
         assert menu is not None
@@ -259,9 +266,9 @@ class KindleUpdaterTests(unittest.TestCase):
         self.assertIn("calendar toggle", menu)
         self.assertIn("calendar on", menu)
         self.assertIn("calendar off", menu)
-        self.assertIn("Toggle HPC / Apple Calendar", menu)
-        self.assertIn("Lock screen: Apple Calendar", menu)
-        self.assertIn("Lock screen: HPC dashboard", menu)
+        self.assertIn("Switch: HPC / Apple Calendar", menu)
+        self.assertIn("Show Apple Calendar", menu)
+        self.assertIn("Show HPC dashboard", menu)
         self.assertIn("toggle_content_mode()", control)
         self.assertIn("UPDATE_URL_CALENDAR", fetcher)
         self.assertIn("UPDATE_URL_CALENDAR_RIGHT", fetcher)
