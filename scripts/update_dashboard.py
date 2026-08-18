@@ -13,7 +13,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -55,6 +55,13 @@ FONT_CANDIDATES = {
         Path("/usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"),
         Path("/System/Library/Fonts/Supplemental/Georgia.ttf"),
+    ],
+    "calendar": [
+        Path("/System/Library/Fonts/PingFang.ttc"),
+        Path("/System/Library/Fonts/STHeiti Medium.ttc"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
     ],
 }
 
@@ -149,9 +156,15 @@ def validate(data: dict[str, Any]) -> dict[str, Any]:
 
 
 class Renderer:
-    def __init__(self, data: dict[str, Any], header_mode: str) -> None:
+    def __init__(
+        self,
+        data: dict[str, Any],
+        header_mode: str,
+        agenda: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.data = data
         self.header_mode = header_mode
+        self.agenda_data = agenda
         self.image = Image.new("L", (WIDTH, HEIGHT), WHITE)
         self.draw = ImageDraw.Draw(self.image)
         self._fonts: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
@@ -217,6 +230,24 @@ class Renderer:
         self.nodes()
         self.accounts()
         return self.image
+
+    def clipped_text(
+        self,
+        xy: tuple[float, float],
+        value: Any,
+        size: int,
+        max_width: float,
+        family: str = "calendar",
+        **kwargs: Any,
+    ) -> None:
+        rendered = str(value)
+        font = self.font(family, size)
+        if self.draw.textlength(rendered, font=font) > max_width:
+            suffix = "…"
+            while rendered and self.draw.textlength(rendered + suffix, font=font) > max_width:
+                rendered = rendered[:-1]
+            rendered = rendered.rstrip() + suffix
+        self.text(xy, rendered, size, family, **kwargs)
 
     def header(self) -> None:
         cluster = self.data["cluster"]
@@ -369,7 +400,6 @@ class Renderer:
                 )
             self.rule((50, separators[row], 1022, separators[row]), soft=True)
 
-
 class RightLandscapeRenderer(Renderer):
     """Render a landscape dashboard for a device rotated clockwise.
 
@@ -378,8 +408,13 @@ class RightLandscapeRenderer(Renderer):
     No framebuffer rotation or stock-UI orientation change is required.
     """
 
-    def __init__(self, data: dict[str, Any], header_mode: str) -> None:
-        super().__init__(data, header_mode)
+    def __init__(
+        self,
+        data: dict[str, Any],
+        header_mode: str,
+        agenda: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(data, header_mode, agenda)
         self.image = Image.new("L", (LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT), WHITE)
         self.draw = ImageDraw.Draw(self.image)
 
@@ -524,14 +559,276 @@ class RightLandscapeRenderer(Renderer):
             if index < 5:
                 self.rule((left, baseline + 25, 1396, baseline + 25), soft=True)
 
+class CalendarRenderer(Renderer):
+    """Render an Apple-inspired standalone six-week month grid."""
+
+    LOGICAL_WIDTH = WIDTH
+    LOGICAL_HEIGHT = HEIGHT
+    MARGIN = 42
+    HEADER_BOTTOM = 164
+    WEEKDAY_BOTTOM = 224
+    GRID_BOTTOM = 1406
+    TITLE_SIZE = 51
+    WEEKDAY_SIZE = 20
+    DATE_SIZE = 22
+    EVENT_SIZE = 14
+    EVENT_HEIGHT = 28
+    EVENT_GAP = 7
+    EVENTS_PER_DAY = 4
+
+    def __init__(
+        self,
+        data: dict[str, Any],
+        header_mode: str,
+        agenda: list[dict[str, Any]],
+        calendar_date: str,
+    ) -> None:
+        super().__init__(data, header_mode, agenda)
+        try:
+            self.day = datetime.fromisoformat(calendar_date).date()
+        except ValueError as exc:
+            raise DashboardError("calendar_date must use ISO format") from exc
+        self.month_start = self.day.replace(day=1)
+        self.grid_start = self.month_start - timedelta(
+            days=(self.month_start.weekday() + 1) % 7
+        )
+        self.image = Image.new(
+            "L", (self.LOGICAL_WIDTH, self.LOGICAL_HEIGHT), WHITE
+        )
+        self.draw = ImageDraw.Draw(self.image)
+        self.events_by_day = self._events_by_day()
+
+    def _events_by_day(self) -> dict[date, list[dict[str, Any]]]:
+        grouped: dict[date, list[dict[str, Any]]] = {}
+        for event in self.agenda_data or []:
+            try:
+                event_day = date.fromisoformat(str(event["date"]))
+                title = str(event["title"]).strip()
+                event_time = str(event.get("time", "")).strip()
+            except (KeyError, TypeError, ValueError) as exc:
+                raise DashboardError("calendar event is invalid") from exc
+            if not title or len(event_time) > 5:
+                raise DashboardError("calendar event is invalid")
+            grouped.setdefault(event_day, []).append(
+                {
+                    "title": title,
+                    "time": event_time,
+                    "all_day": bool(event.get("all_day")),
+                }
+            )
+        return grouped
+
+    def render(self) -> Image.Image:
+        self._render_logical()
+        return self.image
+
+    def _render_logical(self) -> None:
+        width, height = self.LOGICAL_WIDTH, self.LOGICAL_HEIGHT
+        self.draw.rectangle((0, 0, width - 1, height - 1), fill=WHITE)
+        self.draw.rectangle((2, 2, width - 3, height - 3), outline=DARK, width=4)
+        self._month_header()
+        self._month_grid()
+
+    def _month_header(self) -> None:
+        left = self.MARGIN
+        width = self.LOGICAL_WIDTH
+        month_title = f"{self.day.year}年 {self.day.month}月"
+        self.text((left, 82), month_title, self.TITLE_SIZE, "calendar")
+        self.text((left + 2, 118), "APPLE CALENDAR · 本月", 16, "calendar", spacing=1.0)
+
+        segment_width = 184
+        segment_left = (width - segment_width) // 2
+        segment_top = 48
+        segment_bottom = 91
+        self.draw.rounded_rectangle(
+            (segment_left, segment_top, segment_left + segment_width, segment_bottom),
+            radius=9,
+            fill=235,
+            outline=190,
+            width=2,
+        )
+        labels = ("日", "周", "月", "年")
+        segment = segment_width / 4
+        active_left = int(segment_left + 2 * segment)
+        self.draw.rounded_rectangle(
+            (active_left, segment_top + 2, int(active_left + segment), segment_bottom - 2),
+            radius=7,
+            fill=76,
+        )
+        for index, label in enumerate(labels):
+            self.text(
+                (segment_left + segment * (index + 0.5), 70),
+                label,
+                17,
+                "calendar",
+                "mm",
+                fill=WHITE if index == 2 else DARK,
+            )
+        self.text((width - self.MARGIN, 78), "自动更新", 17, "calendar", "rs")
+        self.text((width - self.MARGIN, 111), "UTC+8", 14, "sans_bold", "rs", fill=MID)
+        self.rule((left, self.HEADER_BOTTOM, width - left, self.HEADER_BOTTOM), width=3)
+
+    def _month_grid(self) -> None:
+        left = self.MARGIN
+        right = self.LOGICAL_WIDTH - self.MARGIN
+        grid_top = self.WEEKDAY_BOTTOM
+        col_width = (right - left) / 7
+        row_height = (self.GRID_BOTTOM - grid_top) / 6
+        weekdays = ("周日", "周一", "周二", "周三", "周四", "周五", "周六")
+        for column, label in enumerate(weekdays):
+            center = left + col_width * (column + 0.5)
+            self.text(
+                (center, self.HEADER_BOTTOM + 34),
+                label,
+                self.WEEKDAY_SIZE,
+                "calendar",
+                "mm",
+                fill=MID if column in (0, 6) else DARK,
+            )
+        for row in range(6):
+            for column in range(7):
+                cell_left = int(round(left + col_width * column))
+                cell_right = int(round(left + col_width * (column + 1)))
+                cell_top = int(round(grid_top + row_height * row))
+                cell_bottom = int(round(grid_top + row_height * (row + 1)))
+                cell_day = self.grid_start + timedelta(days=row * 7 + column)
+                if cell_day.month != self.day.month:
+                    self.draw.rectangle(
+                        (cell_left + 1, cell_top + 1, cell_right - 1, cell_bottom - 1),
+                        fill=246,
+                    )
+                self._day_cell(
+                    cell_day,
+                    cell_left,
+                    cell_top,
+                    cell_right,
+                    cell_bottom,
+                    column,
+                )
+        for column in range(8):
+            x = int(round(left + col_width * column))
+            self.rule((x, grid_top, x, self.GRID_BOTTOM), width=2, soft=True)
+        for row in range(7):
+            y = int(round(grid_top + row_height * row))
+            self.rule((left, y, right, y), width=2, soft=True)
+
+    def _day_cell(
+        self,
+        cell_day: date,
+        left: int,
+        top: int,
+        right: int,
+        bottom: int,
+        column: int,
+    ) -> None:
+        date_label = f"{cell_day.month}月{cell_day.day}日" if cell_day.day == 1 else f"{cell_day.day}日"
+        date_fill = MID if cell_day.month != self.day.month or column in (0, 6) else DARK
+        date_x = right - 11
+        date_y = top + 29
+        if cell_day == self.day:
+            radius = 20
+            center_x = right - 28
+            center_y = top + 25
+            self.draw.ellipse(
+                (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
+                fill=DARK,
+            )
+            self.text(
+                (center_x, center_y),
+                str(cell_day.day),
+                self.DATE_SIZE,
+                "sans_bold",
+                "mm",
+                fill=WHITE,
+            )
+        else:
+            self.text(
+                (date_x, date_y),
+                date_label,
+                self.DATE_SIZE,
+                "calendar",
+                "rs",
+                fill=date_fill,
+            )
+
+        events = self.events_by_day.get(cell_day, [])
+        bar_top = top + 50
+        max_width = right - left - 14
+        for index, event in enumerate(events[: self.EVENTS_PER_DAY]):
+            y = bar_top + index * (self.EVENT_HEIGHT + self.EVENT_GAP)
+            if y + self.EVENT_HEIGHT >= bottom - 5:
+                break
+            all_day = event["all_day"]
+            fill = 55 if all_day else 218
+            text_fill = WHITE if all_day else DARK
+            self.draw.rounded_rectangle(
+                (left + 5, y, right - 5, y + self.EVENT_HEIGHT),
+                radius=7,
+                fill=fill,
+                outline=fill if all_day else 175,
+                width=1,
+            )
+            prefix = "" if all_day or not event["time"] else f"{event['time']} "
+            self.clipped_text(
+                (left + 11, y + self.EVENT_HEIGHT - 7),
+                prefix + event["title"],
+                self.EVENT_SIZE,
+                max_width - 12,
+                family="calendar",
+                fill=text_fill,
+            )
+        hidden = len(events) - min(len(events), self.EVENTS_PER_DAY)
+        if hidden > 0:
+            self.text(
+                (right - 9, bottom - 9),
+                f"+{hidden}",
+                14,
+                "sans_bold",
+                "rs",
+                fill=MID,
+            )
+
+
+class RightCalendarRenderer(CalendarRenderer):
+    """Pre-rotate the Apple month view for clockwise physical placement."""
+
+    LOGICAL_WIDTH = LANDSCAPE_WIDTH
+    LOGICAL_HEIGHT = LANDSCAPE_HEIGHT
+    MARGIN = 44
+    HEADER_BOTTOM = 128
+    WEEKDAY_BOTTOM = 182
+    GRID_BOTTOM = 1024
+    TITLE_SIZE = 45
+    WEEKDAY_SIZE = 18
+    DATE_SIZE = 19
+    EVENT_SIZE = 14
+    EVENT_HEIGHT = 26
+    EVENT_GAP = 5
+    EVENTS_PER_DAY = 2
+
+    def render(self) -> Image.Image:
+        self._render_logical()
+        return self.image.transpose(Image.Transpose.ROTATE_90)
+
 
 def render_dashboard(
-    data: dict[str, Any], header_mode: str = "blank", orientation: str = "portrait"
+    data: dict[str, Any],
+    header_mode: str = "blank",
+    orientation: str = "portrait",
+    agenda: list[dict[str, Any]] | None = None,
+    calendar_date: str | None = None,
 ) -> Image.Image:
+    if agenda is not None:
+        effective_date = calendar_date or datetime.now().date().isoformat()
+        if orientation == "portrait":
+            return CalendarRenderer(data, header_mode, agenda, effective_date).render()
+        if orientation == "right":
+            return RightCalendarRenderer(data, header_mode, agenda, effective_date).render()
+        raise DashboardError(f"unsupported orientation: {orientation}")
     if orientation == "portrait":
-        return Renderer(data, header_mode).render()
+        return Renderer(data, header_mode, agenda).render()
     if orientation == "right":
-        return RightLandscapeRenderer(data, header_mode).render()
+        return RightLandscapeRenderer(data, header_mode, agenda).render()
     raise DashboardError(f"unsupported orientation: {orientation}")
 
 

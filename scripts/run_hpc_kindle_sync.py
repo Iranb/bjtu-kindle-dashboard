@@ -7,11 +7,16 @@ import argparse
 import fcntl
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
+from zoneinfo import ZoneInfo
 
+from apple_calendar_agenda import CalendarError, query_apple_calendar_range
 from publish_kindle_live import PublishError, publish
 from publish_kindle_ssh import (
+    DEFAULT_REMOTE_CALENDAR_PATH,
+    DEFAULT_REMOTE_CALENDAR_RIGHT_PATH,
     DEFAULT_REMOTE_PATH,
     DEFAULT_REMOTE_RIGHT_PATH,
     publish_ssh,
@@ -30,6 +35,17 @@ from sync_hpc_widget import (
 DEFAULT_RUNTIME = (
     Path.home() / "Library" / "Application Support" / "BJTUKindleSync"
 )
+CALENDAR_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def current_month_grid_window(now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Return the Sunday-to-Saturday six-week grid used by Apple month view."""
+
+    local_now = (now or datetime.now(timezone.utc)).astimezone(CALENDAR_TIMEZONE)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    days_since_sunday = (month_start.weekday() + 1) % 7
+    grid_start = month_start - timedelta(days=days_since_sunday)
+    return grid_start.astimezone(timezone.utc), (grid_start + timedelta(days=42)).astimezone(timezone.utc)
 
 
 def load_optional_json(path: Path) -> dict[str, Any]:
@@ -51,44 +67,64 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             return {"result": "skipped", "reason": "already_running"}
 
         safe_data = runtime / "state" / "dashboard.json"
-        orientations = ("portrait", "right") if args.publish_both else (args.orientation,)
-        render_receipts: dict[str, dict[str, Any]] = {}
-        outputs: dict[str, Path] = {}
-        for orientation in orientations:
-            if args.publish_both:
-                filename = (
-                    "panel-base.png"
-                    if orientation == "portrait"
-                    else "panel-base-right.png"
-                )
-                render_state = runtime / "state" / f"render-{orientation}.json"
-            else:
-                filename = "panel-base.png"
-                render_state = runtime / "state" / "render.json"
-            output = runtime / "outbox" / filename
-            outputs[orientation] = output
-            sync_args = argparse.Namespace(
-                snapshot=args.snapshot.expanduser(),
-                image_output=output,
-                data_output=safe_data,
-                state_file=render_state,
-                max_source_age=args.max_source_age,
-                account_label=args.account_label,
-                force=args.force_render,
-                orientation=orientation,
+        agenda = None
+        if args.publish_calendar:
+            calendar_start, calendar_end = current_month_grid_window()
+            agenda = query_apple_calendar_range(
+                start=calendar_start,
+                end=calendar_end,
+                max_events=args.calendar_max_events,
             )
-            render_receipts[orientation] = sync_once(sync_args)
-
-        hashes = {
-            orientation: render_receipts[orientation]["image_sha256"]
-            for orientation in orientations
+        orientations = ("portrait", "right") if args.publish_both else (args.orientation,)
+        modes = ("dashboard", "calendar") if args.publish_calendar else ("dashboard",)
+        render_receipts: dict[tuple[str, str], dict[str, Any]] = {}
+        outputs: dict[tuple[str, str], Path] = {}
+        filenames = {
+            ("dashboard", "portrait"): "panel-base.png",
+            ("dashboard", "right"): "panel-base-right.png",
+            ("calendar", "portrait"): "panel-calendar.png",
+            ("calendar", "right"): "panel-calendar-right.png",
         }
+        for mode in modes:
+            for orientation in orientations:
+                filename = filenames[(mode, orientation)]
+                if mode == "calendar":
+                    render_state = runtime / "state" / f"render-calendar-{orientation}.json"
+                elif args.publish_both:
+                    render_state = runtime / "state" / f"render-{orientation}.json"
+                else:
+                    render_state = runtime / "state" / "render.json"
+                output = runtime / "outbox" / filename
+                outputs[(mode, orientation)] = output
+                sync_args = argparse.Namespace(
+                    snapshot=args.snapshot.expanduser(),
+                    image_output=output,
+                    data_output=safe_data,
+                    state_file=render_state,
+                    max_source_age=args.max_source_age,
+                    account_label=args.account_label,
+                    force=args.force_render,
+                    orientation=orientation,
+                    agenda=agenda if mode == "calendar" else None,
+                )
+                render_receipts[(mode, orientation)] = sync_once(sync_args)
+
+        hashes_by_mode = {
+            mode: {
+                orientation: render_receipts[(mode, orientation)]["image_sha256"]
+                for orientation in orientations
+            }
+            for mode in modes
+        }
+        hashes: Any = hashes_by_mode if args.publish_calendar else hashes_by_mode["dashboard"]
         any_rendered = any(row["changed"] for row in render_receipts.values())
         receipt: dict[str, Any] = {
             "result": "rendered" if any_rendered else "unchanged",
-            "image_sha256": hashes if args.publish_both else hashes[args.orientation],
+            "image_sha256": hashes if (args.publish_both or args.publish_calendar) else hashes[args.orientation],
             "stale": any(row["stale"] for row in render_receipts.values()),
             "orientations": list(orientations),
+            "calendar": "enabled" if args.publish_calendar else "disabled",
+            "calendar_event_count": len(agenda or []),
         }
         if not args.remote and not args.ssh_target:
             receipt["publish"] = "disabled"
@@ -105,6 +141,14 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                     not args.publish_both
                     or publish_state.get("remote_right_path") == args.ssh_right_path
                 )
+                and (
+                    not args.publish_calendar
+                    or (
+                        publish_state.get("remote_calendar_path") == args.ssh_calendar_path
+                        and publish_state.get("remote_calendar_right_path")
+                        == args.ssh_calendar_right_path
+                    )
+                )
             )
         else:
             destination_matches = bool(
@@ -112,7 +156,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 and publish_state.get("branch") == args.branch
                 and publish_state.get("remote") == args.remote
             )
-        expected_hash_state: Any = hashes if args.publish_both else hashes[args.orientation]
+        expected_hash_state: Any = (
+            hashes if (args.publish_both or args.publish_calendar) else hashes[args.orientation]
+        )
         if publish_state.get("image_sha256") == expected_hash_state and destination_matches:
             receipt["publish"] = "unchanged"
             return receipt
@@ -120,7 +166,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         if args.ssh_target:
             portrait_orientation = "portrait" if args.publish_both else args.orientation
             publish_receipt = publish_ssh(
-                image=outputs[portrait_orientation],
+                image=outputs[("dashboard", portrait_orientation)],
                 target=args.ssh_target,
                 remote_path=args.ssh_path,
                 max_bytes=args.max_image_bytes,
@@ -128,10 +174,28 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             right_publish_receipt: Optional[dict[str, Any]] = None
             if args.publish_both:
                 right_publish_receipt = publish_ssh(
-                    image=outputs["right"],
+                    image=outputs[("dashboard", "right")],
                     target=args.ssh_target,
                     remote_path=args.ssh_right_path,
                     max_bytes=args.max_image_bytes,
+                )
+            calendar_publish_receipts: list[dict[str, Any]] = []
+            if args.publish_calendar:
+                calendar_publish_receipts.append(
+                    publish_ssh(
+                        image=outputs[("calendar", "portrait")],
+                        target=args.ssh_target,
+                        remote_path=args.ssh_calendar_path,
+                        max_bytes=args.max_image_bytes,
+                    )
+                )
+                calendar_publish_receipts.append(
+                    publish_ssh(
+                        image=outputs[("calendar", "right")],
+                        target=args.ssh_target,
+                        remote_path=args.ssh_calendar_right_path,
+                        max_bytes=args.max_image_bytes,
+                    )
                 )
             published_state = {
                 "version": 1,
@@ -142,9 +206,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             }
             if args.publish_both:
                 published_state["remote_right_path"] = args.ssh_right_path
+            if args.publish_calendar:
+                published_state["remote_calendar_path"] = args.ssh_calendar_path
+                published_state["remote_calendar_right_path"] = args.ssh_calendar_right_path
         else:
             publish_receipt = publish(
-                image=outputs[args.orientation],
+                image=outputs[("dashboard", args.orientation)],
                 worktree=runtime / "publisher",
                 remote=args.remote,
                 branch=args.branch,
@@ -163,6 +230,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         publish_changed = publish_receipt["changed"]
         if args.ssh_target and args.publish_both and right_publish_receipt is not None:
             publish_changed = publish_changed or right_publish_receipt["changed"]
+        if args.ssh_target and args.publish_calendar:
+            publish_changed = publish_changed or any(
+                row["changed"] for row in calendar_publish_receipts
+            )
         receipt["publish"] = "updated" if publish_changed else "unchanged"
         if "remote_head" in publish_receipt:
             receipt["remote_head"] = publish_receipt["remote_head"]
@@ -186,6 +257,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--ssh-path", default=DEFAULT_REMOTE_PATH)
     parser.add_argument("--ssh-right-path", default=DEFAULT_REMOTE_RIGHT_PATH)
+    parser.add_argument("--ssh-calendar-path", default=DEFAULT_REMOTE_CALENDAR_PATH)
+    parser.add_argument(
+        "--ssh-calendar-right-path", default=DEFAULT_REMOTE_CALENDAR_RIGHT_PATH
+    )
     parser.add_argument("--branch", default="kindle-live")
     parser.add_argument("--max-source-age", type=int, default=900)
     parser.add_argument("--max-image-bytes", type=int, default=2 * 1024 * 1024)
@@ -200,6 +275,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="render and publish portrait plus right variants (SSH edge only)",
     )
+    parser.add_argument(
+        "--publish-calendar",
+        action="store_true",
+        help="read Apple Calendar locally and publish protected month-view variants",
+    )
+    parser.add_argument("--calendar-hours", type=int, default=1008)
+    parser.add_argument("--calendar-max-events", type=int, default=84)
     parser.add_argument("--account-label", action="append", default=[])
     return parser
 
@@ -218,12 +300,27 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     try:
         if args.publish_both and args.remote:
             parser.error("--publish-both currently requires --ssh-target or local-only")
+        if args.publish_calendar and (not args.ssh_target or not args.publish_both):
+            parser.error("--publish-calendar requires --ssh-target and --publish-both")
+        if args.calendar_hours != 1008:
+            parser.error("--calendar-hours must be 1008 for the six-week month view")
+        if args.calendar_max_events < 1 or args.calendar_max_events > 84:
+            parser.error("--calendar-max-events must be 1..84")
         if args.ssh_target:
             validate_target(args.ssh_target)
             validate_remote_path(args.ssh_path)
             validate_remote_path(args.ssh_right_path)
+            validate_remote_path(args.ssh_calendar_path)
+            validate_remote_path(args.ssh_calendar_right_path)
             if args.publish_both and args.ssh_path == args.ssh_right_path:
                 parser.error("--ssh-path and --ssh-right-path must differ")
+            selected_paths = [args.ssh_path, args.ssh_right_path]
+            if args.publish_calendar:
+                selected_paths.extend(
+                    [args.ssh_calendar_path, args.ssh_calendar_right_path]
+                )
+            if len(selected_paths) != len(set(selected_paths)):
+                parser.error("all SSH panel paths must differ")
     except PublishError as exc:
         parser.error(str(exc))
     return args
@@ -233,7 +330,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         receipt = run_once(args)
-    except (SyncError, PublishError, OSError) as exc:
+    except (CalendarError, SyncError, PublishError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(receipt, ensure_ascii=False, sort_keys=True))

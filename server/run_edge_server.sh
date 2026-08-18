@@ -7,6 +7,9 @@ PYTHON=${BJTU_EDGE_PYTHON:-python3}
 SERVER="$EDGE_ROOT/app/serve_kindle_panel.py"
 PANEL="$EDGE_ROOT/www/panel-base.png"
 RIGHT_PANEL="$EDGE_ROOT/www/panel-base-right.png"
+CALENDAR_PANEL="$EDGE_ROOT/www/panel-calendar.png"
+CALENDAR_RIGHT_PANEL="$EDGE_ROOT/www/panel-calendar-right.png"
+CALENDAR_TOKEN="$EDGE_ROOT/pki/calendar.token"
 CERT="$EDGE_ROOT/pki/server.crt"
 KEY="$EDGE_ROOT/pki/server.key"
 PID_FILE="$EDGE_ROOT/run/server.pid"
@@ -32,13 +35,33 @@ start_server() {
     fi
     mkdir -p "$EDGE_ROOT/run" "$EDGE_ROOT/log"
     umask 077
-    nohup "$PYTHON" "$SERVER" \
-        --panel "$PANEL" \
-        --right-panel "$RIGHT_PANEL" \
-        --cert "$CERT" \
-        --key "$KEY" \
-        --port "$PORT" \
-        >> "$LOG_FILE" 2>&1 &
+    CALENDAR_FILES=0
+    [ -f "$CALENDAR_PANEL" ] && CALENDAR_FILES=$((CALENDAR_FILES + 1))
+    [ -f "$CALENDAR_RIGHT_PANEL" ] && CALENDAR_FILES=$((CALENDAR_FILES + 1))
+    [ -f "$CALENDAR_TOKEN" ] && CALENDAR_FILES=$((CALENDAR_FILES + 1))
+    if [ "$CALENDAR_FILES" -ne 0 ] && [ "$CALENDAR_FILES" -ne 3 ]; then
+        return 1
+    fi
+    if [ "$CALENDAR_FILES" -eq 3 ]; then
+        nohup "$PYTHON" "$SERVER" \
+            --panel "$PANEL" \
+            --right-panel "$RIGHT_PANEL" \
+            --calendar-panel "$CALENDAR_PANEL" \
+            --calendar-right-panel "$CALENDAR_RIGHT_PANEL" \
+            --calendar-token-file "$CALENDAR_TOKEN" \
+            --cert "$CERT" \
+            --key "$KEY" \
+            --port "$PORT" \
+            >> "$LOG_FILE" 2>&1 &
+    else
+        nohup "$PYTHON" "$SERVER" \
+            --panel "$PANEL" \
+            --right-panel "$RIGHT_PANEL" \
+            --cert "$CERT" \
+            --key "$KEY" \
+            --port "$PORT" \
+            >> "$LOG_FILE" 2>&1 &
+    fi
     NEW_PID=$!
     printf '%s\n' "$NEW_PID" > "$PID_FILE"
     sleep 1

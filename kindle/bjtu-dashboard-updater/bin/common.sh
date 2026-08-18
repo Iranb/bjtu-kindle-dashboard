@@ -16,6 +16,7 @@ LAST_RESULT_FILE="$STATE_DIR/last-result"
 LAST_SUCCESS_FILE="$STATE_DIR/last-success"
 ETAG_FILE="$STATE_DIR/etag"
 ORIENTATION_FILE="$STATE_DIR/orientation"
+CONTENT_MODE_FILE="$STATE_DIR/content-mode"
 CURL_CONFIG_FILE="$STATE_DIR/curl.conf"
 FETCH_LOCK_DIR="/tmp/bjtu-dashboard-fetch.lock"
 ASSET="$SCREENSAVER_DIR/assets/panel-base.png"
@@ -51,7 +52,10 @@ config_uint_in_range() {
 load_config() {
     UPDATE_URL=""
     UPDATE_URL_RIGHT=""
+    UPDATE_URL_CALENDAR=""
+    UPDATE_URL_CALENDAR_RIGHT=""
     DISPLAY_ORIENTATION=portrait
+    DISPLAY_CONTENT_MODE=dashboard
     BATTERY_INTERVAL_SECONDS=3600
     CHARGING_INTERVAL_SECONDS=300
     CHARGING_KEEP_AWAKE=1
@@ -124,7 +128,7 @@ load_config() {
         esac
 
         case "$CONFIG_KEY" in
-            UPDATE_URL|UPDATE_URL_RIGHT)
+            UPDATE_URL|UPDATE_URL_RIGHT|UPDATE_URL_CALENDAR|UPDATE_URL_CALENDAR_RIGHT)
                 [ "${#CONFIG_VALUE}" -le 2048 ] || {
                     config_error "$CONFIG_LINE_NUMBER" "$CONFIG_KEY is too long"
                     return 1
@@ -145,6 +149,8 @@ load_config() {
                 case "$CONFIG_KEY" in
                     UPDATE_URL) UPDATE_URL=$CONFIG_VALUE ;;
                     UPDATE_URL_RIGHT) UPDATE_URL_RIGHT=$CONFIG_VALUE ;;
+                    UPDATE_URL_CALENDAR) UPDATE_URL_CALENDAR=$CONFIG_VALUE ;;
+                    UPDATE_URL_CALENDAR_RIGHT) UPDATE_URL_CALENDAR_RIGHT=$CONFIG_VALUE ;;
                 esac
                 ;;
             DISPLAY_ORIENTATION)
@@ -152,6 +158,15 @@ load_config() {
                     portrait|right) DISPLAY_ORIENTATION=$CONFIG_VALUE ;;
                     *)
                         config_error "$CONFIG_LINE_NUMBER" "DISPLAY_ORIENTATION must be portrait or right"
+                        return 1
+                        ;;
+                esac
+                ;;
+            DISPLAY_CONTENT_MODE)
+                case "$CONFIG_VALUE" in
+                    dashboard|calendar) DISPLAY_CONTENT_MODE=$CONFIG_VALUE ;;
+                    *)
+                        config_error "$CONFIG_LINE_NUMBER" "DISPLAY_CONTENT_MODE must be dashboard or calendar"
                         return 1
                         ;;
                 esac

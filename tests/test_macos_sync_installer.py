@@ -97,6 +97,47 @@ class MacOSSyncInstallerTests(unittest.TestCase):
                 ["--print-plist", "--ssh-target", "user@host"]
             )
 
+    def test_calendar_publication_is_opt_in_and_ssh_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plist = MODULE.build_plist(
+                home=root,
+                python=root / "python3",
+                app_dir=root / "app",
+                runtime_dir=root,
+                snapshot=root / "snapshot.json",
+                remote="",
+                ssh_target="kindle-edge",
+                ssh_path="safe/panel.png",
+                branch="kindle-live",
+                interval=300,
+                orientation="portrait",
+                publish_both=True,
+                ssh_right_path="safe/panel-right.png",
+                publish_calendar=True,
+                ssh_calendar_path="safe/calendar.png",
+                ssh_calendar_right_path="safe/calendar-right.png",
+            )
+            arguments = plist["ProgramArguments"]
+            self.assertIn("--publish-calendar", arguments)
+            self.assertIn("--ssh-calendar-path", arguments)
+            self.assertEqual(
+                arguments[arguments.index("--calendar-hours") + 1], "1008"
+            )
+            self.assertEqual(
+                arguments[arguments.index("--calendar-max-events") + 1], "84"
+            )
+            self.assertNotIn("Authorization", str(plist))
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+            MODULE.parse_args(
+                [
+                    "--print-plist",
+                    "--remote", "https://github.com/example/repo.git",
+                    "--publish-calendar",
+                    "--publish-both",
+                ]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

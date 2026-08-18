@@ -56,9 +56,13 @@ validate_png() {
 }
 
 FETCH_URL=$UPDATE_URL
-if [ "$DISPLAY_ORIENTATION" = "right" ]; then
-    FETCH_URL=$UPDATE_URL_RIGHT
-fi
+case "$DISPLAY_CONTENT_MODE:$DISPLAY_ORIENTATION" in
+    dashboard:portrait) FETCH_URL=$UPDATE_URL ;;
+    dashboard:right) FETCH_URL=$UPDATE_URL_RIGHT ;;
+    calendar:portrait) FETCH_URL=$UPDATE_URL_CALENDAR ;;
+    calendar:right) FETCH_URL=$UPDATE_URL_CALENDAR_RIGHT ;;
+    *) fail "invalid_display_mode" ;;
+esac
 [ -n "$FETCH_URL" ] || fail "missing_url"
 case "$FETCH_URL" in
     https://*) CURL_PROTO='=https' ;;
@@ -77,9 +81,20 @@ CURRENT_ORIENTATION=""
 if [ -f "$ORIENTATION_FILE" ]; then
     CURRENT_ORIENTATION=$(tr -d '\r\n' < "$ORIENTATION_FILE" | cut -c1-16)
 fi
+CURRENT_CONTENT_MODE=""
+if [ -f "$CONTENT_MODE_FILE" ]; then
+    CURRENT_CONTENT_MODE=$(tr -d '\r\n' < "$CONTENT_MODE_FILE" | cut -c1-16)
+fi
+
+write_display_state() {
+    write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION" || return 1
+    write_state "$CONTENT_MODE_FILE" "$DISPLAY_CONTENT_MODE"
+}
 
 ETAG=""
-if [ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ] && [ -f "$ETAG_FILE" ]; then
+if [ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ] && \
+   [ "$CURRENT_CONTENT_MODE" = "$DISPLAY_CONTENT_MODE" ] && \
+   [ -f "$ETAG_FILE" ]; then
     ETAG=$(tr -d '\r\n' < "$ETAG_FILE" | cut -c1-256)
 fi
 
@@ -118,7 +133,8 @@ CURL_RC=$?
 case "$HTTP_CODE" in
     304)
         [ "$CURRENT_ORIENTATION" = "$DISPLAY_ORIENTATION" ] || fail "orientation_not_refetched"
-        write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION" || fail "orientation_state"
+        [ "$CURRENT_CONTENT_MODE" = "$DISPLAY_CONTENT_MODE" ] || fail "content_mode_not_refetched"
+        write_display_state || fail "display_state"
         save_response_etag
         write_state "$LAST_SUCCESS_FILE" "$(now_epoch)" >/dev/null 2>&1 || true
         write_state "$LAST_RESULT_FILE" "not-modified:$(now_epoch)" >/dev/null 2>&1 || true
@@ -149,7 +165,7 @@ if [ -f "$ASSET" ]; then
 fi
 
 if [ "$NEW_HASH" = "$OLD_HASH" ]; then
-    write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION" || fail "orientation_state"
+    write_display_state || fail "display_state"
     save_response_etag
     write_state "$LAST_SUCCESS_FILE" "$(now_epoch)" >/dev/null 2>&1 || true
     write_state "$LAST_RESULT_FILE" "unchanged:$(now_epoch)" >/dev/null 2>&1 || true
@@ -164,7 +180,7 @@ fi
 
 chmod 644 "$INCOMING" || fail "chmod"
 mv -f "$INCOMING" "$ASSET" || fail "atomic_replace"
-write_state "$ORIENTATION_FILE" "$DISPLAY_ORIENTATION" || fail "orientation_state"
+write_display_state || fail "display_state"
 save_response_etag
 write_state "$STATE_DIR/last-hash" "$NEW_HASH" >/dev/null 2>&1 || true
 write_state "$LAST_SUCCESS_FILE" "$(now_epoch)" >/dev/null 2>&1 || true

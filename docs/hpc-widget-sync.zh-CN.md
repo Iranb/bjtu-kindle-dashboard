@@ -101,9 +101,13 @@ server/run_edge_server.sh
 ```
 
 SSH 发布器只接受不含凭据的 Host alias 和相对于远端 HOME 的安全路径；上传后在
-服务器核对字节数和 SHA-256，最后用 `mv` 原子替换。边缘服务只开放
-`/panel-base.png` 与 `/healthz`，不提供目录列表，不记录客户端地址或请求 header，
+服务器核对字节数和 SHA-256，最后用 `mv` 原子替换。边缘服务默认只开放
+`/panel-base.png`、`/panel-base-right.png` 与 `/healthz`，不提供目录列表，不记录客户端地址或请求 header，
 并在每次打开图片时重新检查 PNG 签名、1072×1448、8 位灰度和大小上限。
+
+可选 Apple Calendar 模式额外开放两个需要 Bearer header 的日程路由，但只上传最终
+PNG，不上传日历 JSON、地点、参与人或备注。完整设计与 KUAL 按钮见
+[Kindle 锁屏与 Apple 日历联动](apple-calendar-lockscreen.zh-CN.md)。
 
 如果服务器没有 root Web 服务、sudo 或公网域名，可在确认空闲的非特权端口运行
 Python HTTPS 服务，并使用专用私有 CA：

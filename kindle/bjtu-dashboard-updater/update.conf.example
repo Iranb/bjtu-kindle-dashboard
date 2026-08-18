@@ -4,10 +4,16 @@
 # never in this USB-visible file or in the URL query string.
 UPDATE_URL="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base.png?ref=main"
 UPDATE_URL_RIGHT="https://api.github.com/repos/Iranb/bjtu-kindle-dashboard/contents/assets/panel-base-right.png?ref=main"
+# Calendar panels contain private event titles and must use an authenticated edge.
+# Keep these empty until a root-private Authorization header is installed in curl.conf.
+UPDATE_URL_CALENDAR=""
+UPDATE_URL_CALENDAR_RIGHT=""
 
 # portrait: normal placement. right: the Kindle is physically rotated clockwise;
 # the URL must then serve an image rendered with --orientation right.
 DISPLAY_ORIENTATION=portrait
+# dashboard: anonymous HPC. calendar: standalone protected month view.
+DISPLAY_CONTENT_MODE=dashboard
 
 # Five-minute checks while plugged in; one-hour RTC fallback on battery.
 BATTERY_INTERVAL_SECONDS=3600

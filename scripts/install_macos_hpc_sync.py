@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import plistlib
 import shutil
@@ -13,7 +14,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from publish_kindle_live import PublishError, validate_branch, validate_remote
-from publish_kindle_ssh import validate_remote_path, validate_target
+from publish_kindle_ssh import (
+    DEFAULT_REMOTE_CALENDAR_PATH,
+    DEFAULT_REMOTE_CALENDAR_RIGHT_PATH,
+    validate_remote_path,
+    validate_target,
+)
 from sync_hpc_widget import DEFAULT_SNAPSHOT
 
 
@@ -25,6 +31,8 @@ DEFAULT_RUNTIME = (
 DEFAULT_PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 RUNTIME_SCRIPTS = (
     "update_dashboard.py",
+    "apple_calendar_agenda.py",
+    "apple_calendar_reader.js",
     "sync_hpc_widget.py",
     "publish_kindle_live.py",
     "publish_kindle_ssh.py",
@@ -34,6 +42,109 @@ RUNTIME_SCRIPTS = (
 
 class InstallError(RuntimeError):
     """Raised when the launchd installation cannot be completed safely."""
+
+
+CALENDAR_HELPER_ID = "com.iranb.bjtu-kindle-calendar-reader"
+
+
+def install_calendar_helper(app_dir: Path) -> Path:
+    source = app_dir / "apple_calendar_reader.js"
+    helper = app_dir / "AppleCalendarAgendaReader.app"
+    marker = app_dir / ".calendar-helper-source.sha256"
+    source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    executable = helper / "Contents" / "MacOS" / "applet"
+    if executable.is_file() and marker.is_file():
+        if marker.read_text(encoding="ascii").strip() == source_hash:
+            return executable
+
+    build_root = app_dir / f".calendar-helper-build.{os.getpid()}"
+    built = build_root / helper.name
+    backup = app_dir / f".{helper.name}.previous"
+    try:
+        build_root.mkdir(mode=0o700)
+        subprocess.run(
+            ["/usr/bin/osacompile", "-l", "JavaScript", "-o", str(built), str(source)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        info = built / "Contents" / "Info.plist"
+        subprocess.run(
+            [
+                "/usr/bin/plutil",
+                "-replace",
+                "CFBundleIdentifier",
+                "-string",
+                CALENDAR_HELPER_ID,
+                str(info),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "/usr/bin/plutil",
+                "-replace",
+                "NSAppleEventsUsageDescription",
+                "-string",
+                "Read a bounded Apple Calendar month view for the private Kindle lock screen.",
+                str(info),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "/usr/bin/codesign",
+                "--force",
+                "--deep",
+                "--sign",
+                "-",
+                "--identifier",
+                CALENDAR_HELPER_ID,
+                str(built),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if backup.exists():
+            shutil.rmtree(backup)
+        if helper.exists():
+            helper.rename(backup)
+        built.rename(helper)
+        if backup.exists():
+            shutil.rmtree(backup)
+        write_atomic(marker, (source_hash + "\n").encode("ascii"))
+    except Exception:
+        if not helper.exists() and backup.exists():
+            backup.rename(helper)
+        raise
+    finally:
+        if build_root.exists():
+            shutil.rmtree(build_root)
+    return helper / "Contents" / "MacOS" / "applet"
+
+
+def probe_calendar_access(python: Path, app_dir: Path) -> None:
+    result = subprocess.run(
+        [str(python), str(app_dir / "apple_calendar_agenda.py"), "--hours", "24", "--max-events", "5"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=30,
+        env={
+            "HOME": str(Path.home()),
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "LANG": "en_US.UTF-8",
+            "PYTHONUNBUFFERED": "1",
+        },
+    )
+    if result.returncode != 0:
+        raise InstallError("Apple Calendar helper permission or query failed")
 
 
 def build_plist(
@@ -51,6 +162,11 @@ def build_plist(
     orientation: str,
     publish_both: bool,
     ssh_right_path: str,
+    publish_calendar: bool = False,
+    ssh_calendar_path: str = DEFAULT_REMOTE_CALENDAR_PATH,
+    ssh_calendar_right_path: str = DEFAULT_REMOTE_CALENDAR_RIGHT_PATH,
+    calendar_hours: int = 1008,
+    calendar_max_events: int = 84,
 ) -> dict[str, Any]:
     arguments = [
         "/usr/bin/env",
@@ -77,6 +193,20 @@ def build_plist(
         if publish_both:
             arguments.extend(
                 ["--publish-both", "--ssh-right-path", ssh_right_path]
+            )
+        if publish_calendar:
+            arguments.extend(
+                [
+                    "--publish-calendar",
+                    "--ssh-calendar-path",
+                    ssh_calendar_path,
+                    "--ssh-calendar-right-path",
+                    ssh_calendar_right_path,
+                    "--calendar-hours",
+                    str(calendar_hours),
+                    "--calendar-max-events",
+                    str(calendar_max_events),
+                ]
             )
     return {
         "Label": LABEL,
@@ -135,6 +265,11 @@ def plist_for_args(args: argparse.Namespace, python: Path, app_dir: Path) -> dic
         orientation=args.orientation,
         publish_both=args.publish_both,
         ssh_right_path=args.ssh_right_path,
+        publish_calendar=args.publish_calendar,
+        ssh_calendar_path=args.ssh_calendar_path,
+        ssh_calendar_right_path=args.ssh_calendar_right_path,
+        calendar_hours=args.calendar_hours,
+        calendar_max_events=args.calendar_max_events,
     )
 
 
@@ -170,6 +305,10 @@ def install(args: argparse.Namespace) -> None:
         ],
         check=True,
     )
+
+    if args.publish_calendar:
+        install_calendar_helper(app_dir)
+        probe_calendar_access(venv_python, app_dir)
 
     plist = plist_for_args(args, venv_python, app_dir)
     write_atomic(args.plist, plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=True))
@@ -213,6 +352,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--ssh-right-path",
         default=".local/share/bjtu-kindle-edge/www/panel-base-right.png",
     )
+    parser.add_argument("--ssh-calendar-path", default=DEFAULT_REMOTE_CALENDAR_PATH)
+    parser.add_argument(
+        "--ssh-calendar-right-path", default=DEFAULT_REMOTE_CALENDAR_RIGHT_PATH
+    )
     parser.add_argument("--branch", default="kindle-live")
     parser.add_argument("--interval", type=int, default=300)
     parser.add_argument(
@@ -225,6 +368,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="publish portrait and right variants to an SSH edge",
     )
+    parser.add_argument(
+        "--publish-calendar",
+        action="store_true",
+        help="publish Apple Calendar month-view variants to the SSH edge",
+    )
+    parser.add_argument("--calendar-hours", type=int, default=1008)
+    parser.add_argument("--calendar-max-events", type=int, default=84)
     return parser
 
 
@@ -244,10 +394,25 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
             validate_target(args.ssh_target)
             validate_remote_path(args.ssh_path)
             validate_remote_path(args.ssh_right_path)
+            validate_remote_path(args.ssh_calendar_path)
+            validate_remote_path(args.ssh_calendar_right_path)
         if args.publish_both and not args.ssh_target:
             parser.error("--publish-both requires --ssh-target")
         if args.publish_both and args.ssh_path == args.ssh_right_path:
             parser.error("--ssh-path and --ssh-right-path must differ")
+        if args.publish_calendar and (not args.ssh_target or not args.publish_both):
+            parser.error("--publish-calendar requires --ssh-target and --publish-both")
+        if args.calendar_hours != 1008:
+            parser.error("--calendar-hours must be 1008 for the six-week month view")
+        if args.calendar_max_events < 1 or args.calendar_max_events > 84:
+            parser.error("--calendar-max-events must be 1..84")
+        selected_paths = [args.ssh_path, args.ssh_right_path]
+        if args.publish_calendar:
+            selected_paths.extend(
+                [args.ssh_calendar_path, args.ssh_calendar_right_path]
+            )
+        if args.ssh_target and len(selected_paths) != len(set(selected_paths)):
+            parser.error("all SSH panel paths must differ")
     except PublishError as exc:
         parser.error(str(exc))
     return args
