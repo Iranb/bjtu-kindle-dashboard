@@ -124,9 +124,9 @@ python3 scripts/install_macos_hpc_sync.py --install \
 ```
 
 The edge protects `/panel-calendar.png` and `/panel-calendar-right.png` with a
-Bearer value stored only in private runtime files. On Kindle, KUAL provides
-`Toggle HPC / Apple Calendar`, `Lock screen: Apple Calendar`, and
-`Lock screen: HPC dashboard`. See the
+Bearer value stored only in private runtime files. On Kindle, the
+`BJTU Lock Screen Manager` KUAL extension provides `Switch: HPC / Apple Calendar`,
+`Show Apple Calendar`, and `Show HPC dashboard`. See the
 [Apple Calendar lock-screen guide](docs/apple-calendar-lockscreen.zh-CN.md).
 
 ## Deploy to Kindle
@@ -160,7 +160,10 @@ python scripts/deploy_kindle_updater.py kindle
 ```
 
 The deployed package includes KUAL's required `config.xml` registration
-manifest. Reopen KUAL after first installation to load `BJTU Dashboard Updater`.
+manifest. Reopen KUAL after first installation to load
+`BJTU Lock Screen Manager`. The internal extension id, directory, service, and
+command paths intentionally remain `bjtu-dashboard-updater` so an upgrade does
+not duplicate the KUAL extension or lose the existing configuration.
 
 Its default public source is `assets/panel-base.png` from this repository,
 fetched through GitHub's raw Contents API. If a Kindle network cannot reach

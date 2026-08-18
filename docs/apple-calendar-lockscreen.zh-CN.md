@@ -6,13 +6,13 @@ Kindle 的 KUAL 菜单提供显式按钮，用户可以随时在 HPC 仪表盘�
 
 ## 使用方式
 
-打开 KUAL → `BJTU Dashboard Updater`：
+打开 KUAL → `BJTU Lock Screen Manager`：
 
 | 按钮 | 行为 |
 | --- | --- |
-| `Toggle HPC / Apple Calendar` | 在 HPC 仪表盘与独立日历锁屏之间切换 |
-| `Lock screen: Apple Calendar` | 明确启用独立日历锁屏 |
-| `Lock screen: HPC dashboard` | 返回 HPC 仪表盘 |
+| `Switch: HPC / Apple Calendar` | 在 HPC 仪表盘与独立日历锁屏之间切换 |
+| `Show Apple Calendar` | 明确启用独立日历锁屏 |
+| `Show HPC dashboard` | 返回 HPC 仪表盘 |
 
 按钮会短暂停止更新器、拉取对应图片并完整校验，然后恢复原有调度。下载失败时保留
 当前图片；root 私有的生效模式不会前进。按钮不会直接访问 Mac，也不会唤醒 Mac。

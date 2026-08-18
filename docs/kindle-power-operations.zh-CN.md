@@ -210,19 +210,23 @@ lipc-set-prop -i com.lab126.powerd abortSuspend 1
 `config.xml` 是 KUAL 的注册清单。复制新扩展后退出并重新打开 KUAL，才能重新扫描
 扩展目录。
 
-进入 `BJTU Dashboard Updater` 后可使用：
+进入 `BJTU Lock Screen Manager` 后可使用。这里只改变 KUAL 显示名称；扩展目录、
+服务名和命令路径仍保留 `bjtu-dashboard-updater`，因此原配置和升级流程保持兼容：
 
 | 按钮 | 作用 |
 | --- | --- |
-| `Enable scheduled updates` | 启用并启动常驻更新器 |
-| `Disable scheduled updates` | 停止调度但保留最后屏保 |
-| `Restart updater` | 修改配置后重新加载 |
-| `Fetch panel now` | 设备醒着时立即执行一次受保护拉取 |
-| `Toggle portrait / right 90 degrees` | 在竖屏和右转横屏间切换 |
-| `Display: portrait` | 明确切到竖屏 |
-| `Display: right 90 degrees` | 明确切到顺时针右转 90° |
-| `Updater status` | 查看脱敏运行状态 |
-| `Uninstall updater` | 移除调度服务并恢复原渲染钩子 |
+| `Auto updates: enable` | 启用并启动常驻更新器 |
+| `Auto updates: disable` | 停止调度但保留最后屏保 |
+| `Restart lock-screen service` | 修改配置后重新加载 |
+| `Refresh lock screen now` | 设备醒着时立即执行一次受保护拉取 |
+| `Switch: HPC / Apple Calendar` | 在 HPC 与日历锁屏之间切换 |
+| `Show Apple Calendar` | 明确使用日历锁屏 |
+| `Show HPC dashboard` | 明确使用 HPC 仪表盘锁屏 |
+| `Rotate: portrait / right 90 degrees` | 在竖屏和右转横屏间切换 |
+| `Orientation: portrait` | 明确切到竖屏 |
+| `Orientation: right 90 degrees` | 明确切到顺时针右转 90° |
+| `Lock-screen status` | 查看脱敏运行状态 |
+| `Uninstall lock-screen manager` | 移除调度服务并恢复原渲染钩子 |
 
 方向切换会短暂停止更新器，强制下载该方向的图片，校验并原子替换后再恢复调度。
 下载失败时，root 私有的“当前实际方向”不会前进。
@@ -289,7 +293,7 @@ USB 可见的 `update.conf` 只能包含公开 URL 和白名单设置。特权�
 
 ## 11. 常见故障
 
-### KUAL 看不到 Updater
+### KUAL 看不到 Lock Screen Manager
 
 确认扩展目录同时包含 `config.xml` 和 `menu.json`，然后完全退出并重新打开 KUAL。
 只有 `menu.json` 时，当前 KUAL 会忽略整个目录。
