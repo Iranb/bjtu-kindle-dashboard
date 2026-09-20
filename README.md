@@ -129,6 +129,17 @@ Bearer value stored only in private runtime files. On Kindle, the
 `Show Apple Calendar`, and `Show HPC dashboard`. See the
 [Apple Calendar lock-screen guide](docs/apple-calendar-lockscreen.zh-CN.md).
 
+### Standalone Kindle calendar (no resident Mac)
+
+For a second, jailbroken Kindle, the repository also includes a fully
+device-side mode. Gregorian dates, weekdays, Chinese lunar dates, and solar
+terms are computed offline. A bundled Chinese statutory-holiday snapshot is
+used immediately; when Wi-Fi is available, the Kindle performs a best-effort
+weekly refresh of the public holiday JSON itself. The calendar redraws daily
+through RTC even without a network. A computer is needed only for installation.
+
+See the [standalone calendar guide](docs/standalone-kindle-calendar.zh-CN.md).
+
 ## Deploy to Kindle
 
 With an SSH alias such as `kindle` already configured:
@@ -202,6 +213,7 @@ normal suspend to resume. RTC tests always require the user to lock the device.
 - [RTC wake and background Wi-Fi validation (简体中文)](docs/rtc-wifi-validation.zh-CN.md)
 - [Local HPC Widget to Kindle sync (简体中文)](docs/hpc-widget-sync.zh-CN.md)
 - [Apple Calendar lock-screen integration (简体中文)](docs/apple-calendar-lockscreen.zh-CN.md)
+- [Standalone Kindle calendar without a resident Mac (简体中文)](docs/standalone-kindle-calendar.zh-CN.md)
 - [Clockwise 90° lock-screen layout (简体中文)](docs/rotation-layout.zh-CN.md)
 
 All guides use placeholders for network addresses, local usernames and key

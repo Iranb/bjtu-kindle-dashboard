@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "name": "Offline Calendar",
+      "priority": 72,
+      "items": [
+        { "name": "Refresh calendar now", "action": "bin/control.sh refresh" },
+        { "name": "Show current calendar", "action": "bin/control.sh show" },
+        { "name": "Automatic updates: enable", "action": "bin/control.sh enable" },
+        { "name": "Automatic updates: disable", "action": "bin/control.sh disable" },
+        { "name": "Calendar status", "action": "bin/control.sh status" },
+        { "name": "Recent calendar log", "action": "bin/control.sh logs 60" }
+      ]
+    }
+  ]
+}
