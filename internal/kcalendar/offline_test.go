@@ -68,6 +68,19 @@ func TestOfflineRenderNeedsNoFeedOrNetwork(t *testing.T) {
 	}
 }
 
+func TestKindleDefaultFontListIncludesDeviceCJKFont(t *testing.T) {
+	if _, err := os.Stat("../../cmd/kindle-calendar/main.go"); err != nil {
+		t.Skip("source tree unavailable")
+	}
+	source, err := os.ReadFile("../../cmd/kindle-calendar/main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(source, []byte("/usr/java/lib/fonts/STHeitiMedium.ttf")) {
+		t.Fatal("Kindle CJK fallback is missing")
+	}
+}
+
 func TestNextDailyRefresh(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	before := time.Date(2026, 9, 20, 0, 4, 0, 0, loc)

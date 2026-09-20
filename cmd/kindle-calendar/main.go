@@ -31,7 +31,7 @@ func main() {
 	flag.StringVar(
 		&fonts,
 		"fonts",
-		"/usr/java/lib/fonts/DroidSansFallbackFull.ttf,/usr/java/lib/fonts/DroidSansFallback.ttf,/usr/java/lib/fonts/Helvetica_LT_65_Medium.ttf,/System/Library/Fonts/Supplemental/Arial Unicode.ttf,/Library/Fonts/Arial Unicode.ttf",
+		"/usr/java/lib/fonts/STHeitiMedium.ttf,/usr/java/lib/fonts/STHeitiBold.ttf,/usr/java/lib/fonts/DroidSansFallbackFull.ttf,/usr/java/lib/fonts/DroidSansFallback.ttf,/usr/java/lib/fonts/Helvetica_LT_65_Medium.ttf,/System/Library/Fonts/Supplemental/Arial Unicode.ttf,/Library/Fonts/Arial Unicode.ttf",
 		"comma-separated font fallbacks",
 	)
 	flag.IntVar(&width, "width", 1072, "screen width")

@@ -67,7 +67,10 @@ cancel_background_work() {
 arm_rtc() {
     BATTERY=$(battery_level)
     is_uint "$BATTERY" || BATTERY=0
-    [ "$BATTERY" -ge "$LOW_BATTERY_PERCENT" ] || { log "rtc result=skipped reason=low_battery"; return; }
+    if [ "$BATTERY" -lt "$LOW_BATTERY_PERCENT" ] && ! is_charging; then
+        log "rtc result=skipped reason=low_battery"
+        return
+    fi
     NOW=$(now_epoch)
     DUE=$(read_uint "$NEXT_DUE_FILE" 2>/dev/null)
     if ! is_uint "$DUE" || [ "$DUE" -le "$NOW" ]; then DUE=$((NOW + BATTERY_RTC_INTERVAL_SECONDS)); fi

@@ -3,9 +3,19 @@
 . /mnt/us/extensions/kindle-calendar/bin/common.sh
 load_config || exit 2
 ACTION=$1
+DASHBOARD_DIR=/mnt/us/extensions/bjtu-dashboard-updater
+
+stop_competing_dashboard() {
+    if [ -f "$DASHBOARD_DIR/enabled" ]; then
+        rm -f "$DASHBOARD_DIR/enabled"
+        /sbin/stop bjtu-dashboard-updater >/dev/null 2>&1 || true
+        echo "disabled competing BJTU dashboard updater"
+    fi
+}
 
 case "$ACTION" in
     enable)
+        stop_competing_dashboard
         touch "$EXT_DIR/enabled"
         /sbin/stop kindle-calendar >/dev/null 2>&1 || true
         /sbin/start kindle-calendar
@@ -27,4 +37,3 @@ case "$ACTION" in
         tail -n "${2:-60}" "$LOG_FILE" 2>/dev/null ;;
     *) echo "usage: $0 {enable|disable|refresh|show|status|logs}" >&2; exit 2 ;;
 esac
-

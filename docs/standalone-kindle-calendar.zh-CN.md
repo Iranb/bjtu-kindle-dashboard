@@ -39,7 +39,12 @@ Kindle Wi-Fi → holiday-cn HTTPS JSON → 严格验证 → root 私有缓存
 - Wi-Fi 报告 `connectionAvailable` 时，可顺带检查法定节假日数据；
 - 同一设备两次成功联网检查至少间隔七天；
 - 完成后不模拟电源键，由 powerd 自然重新进入深度睡眠；
-- 用户解锁会取消正在运行的任务；低于 20% 电量时不安排新 RTC。
+- 用户解锁会取消正在运行的任务；未充电且低于 20% 电量时不安排新 RTC。
+
+已经安装 `bjtu-native-screensaver` 时，日历直接原子更新其屏保资产，从而复用已经实机
+验证的显示钩子。安装或启用离线日历会停用旧 `bjtu-dashboard-updater` 调度，避免两个更新
+服务竞争；回退时先停用 `Offline Calendar`，再从原 Dashboard 的 KUAL 菜单重新启用。
+低电量保护只在未充电时生效。
 
 Kindle 深度睡眠期间 CPU 和 Wi-Fi 都会暂停。RTC 是让本地程序跨日运行的必要机制，但
 更新的内容来自 Kindle 本身，不来自 Mac。

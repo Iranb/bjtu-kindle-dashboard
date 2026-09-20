@@ -6,6 +6,10 @@ CONFIG_FILE=$EXT_DIR/calendar.conf
 FEED_FILE=$STATE_DIR/feed.url
 CA_FILE=$STATE_DIR/ca.pem
 IMAGE_FILE=/mnt/us/screensavers/kindle-calendar.png
+NATIVE_SCREENSAVER_ASSET=/mnt/us/extensions/bjtu-native-screensaver/assets/panel-base.png
+if [ -x /mnt/us/extensions/bjtu-native-screensaver/bin/render-panel.sh ]; then
+    IMAGE_FILE=$NATIVE_SCREENSAVER_ASSET
+fi
 LOG_FILE=$EXT_DIR/calendar.log
 PID_FILE=/tmp/kindle-calendar.pid
 FIFO=/tmp/kindle-calendar-events.fifo
@@ -119,4 +123,5 @@ read_uint() {
 power_state() { lipc-get-prop com.lab126.powerd state 2>/dev/null || printf unknown; }
 wifi_state() { lipc-get-prop com.lab126.wifid cmState 2>/dev/null || printf unknown; }
 battery_level() { lipc-get-prop com.lab126.powerd battLevel 2>/dev/null || printf 0; }
+is_charging() { [ "$(lipc-get-prop com.lab126.powerd isCharging 2>/dev/null)" = 1 ]; }
 now_epoch() { date '+%s'; }

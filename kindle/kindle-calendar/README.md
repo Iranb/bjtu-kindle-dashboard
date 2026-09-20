@@ -21,8 +21,12 @@
 - 联网时最多每七天检查一次法定节假日数据；
 - 节假日 JSON 必须通过年份、日期、数量、重复项和文本范围校验；
 - 所有 PNG 和节假日缓存都通过同目录临时文件、`fsync` 和原子 rename 更新；
-- 用户解锁会取消仍在运行的任务；低于 20% 电量时不安排新的 RTC；
+- 用户解锁会取消仍在运行的任务；未充电且低于 20% 电量时不安排新的 RTC；
 - 不模拟电源键，也不要求 Wi-Fi 在深度睡眠期间保持连接。
+
+若设备已经安装 `bjtu-native-screensaver`，离线日历会复用它的原生屏保资产和显示钩子，
+避免两个钩子互相覆盖。启用离线日历会停用 `bjtu-dashboard-updater` 的调度服务；这是可逆
+操作。若要回退，先在 KUAL 停用 `Offline Calendar`，再重新启用 Dashboard。
 
 默认画布为 1072×1448、时区为 `Asia/Shanghai`。非 PW3 设备应按实际 framebuffer 修改
 `calendar.conf`。该文件由 root 进程按严格白名单解析，不会被 shell source 或 eval。

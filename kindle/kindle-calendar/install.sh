@@ -18,7 +18,11 @@ case "$ACTION" in
             echo "install a compatible custom-screensaver/FBInk runtime first" >&2
             exit 1
         fi
-        mkdir -p "$STATE_DIR/holidays" /mnt/us/screensavers
+        IMAGE_DIR=/mnt/us/screensavers
+        if [ -x /mnt/us/extensions/bjtu-native-screensaver/bin/render-panel.sh ]; then
+            IMAGE_DIR=/mnt/us/extensions/bjtu-native-screensaver/assets
+        fi
+        mkdir -p "$STATE_DIR/holidays" /mnt/us/screensavers "$IMAGE_DIR"
         chmod 700 "$STATE_DIR"
         chmod 700 "$STATE_DIR/holidays"
         if [ ! -f "$STATE_DIR/feed.url" ]; then umask 077; : > "$STATE_DIR/feed.url"; fi
@@ -31,6 +35,11 @@ case "$ACTION" in
         RC=$?
         root_ro >/dev/null 2>&1 || true
         [ "$RC" -eq 0 ] || exit 1
+        if [ -f /mnt/us/extensions/bjtu-dashboard-updater/enabled ]; then
+            rm -f /mnt/us/extensions/bjtu-dashboard-updater/enabled
+            /sbin/stop bjtu-dashboard-updater >/dev/null 2>&1 || true
+            echo "disabled competing BJTU dashboard updater"
+        fi
         touch "$EXT_DIR/enabled"
         /sbin/stop kindle-calendar >/dev/null 2>&1 || true
         /sbin/start kindle-calendar

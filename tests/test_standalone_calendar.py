@@ -95,6 +95,16 @@ class StandaloneCalendarPackageTests(unittest.TestCase):
         self.assertIn("-holiday-only", holiday)
         self.assertIn('write_state "$NEXT_DUE_FILE"', holiday)
 
+    def test_native_screensaver_integration_is_single_writer(self) -> None:
+        common = (PACKAGE / "bin/common.sh").read_text(encoding="utf-8")
+        self.assertIn("bjtu-native-screensaver/assets/panel-base.png", common)
+        install = (PACKAGE / "install.sh").read_text(encoding="utf-8")
+        control = (PACKAGE / "bin/control.sh").read_text(encoding="utf-8")
+        self.assertIn("disabled competing BJTU dashboard updater", install)
+        self.assertIn("stop_competing_dashboard", control)
+        daemon = (PACKAGE / "bin/daemon.sh").read_text(encoding="utf-8")
+        self.assertIn("! is_charging", daemon)
+
     def test_offline_config_parser_accepts_only_bounded_whitelist(self) -> None:
         valid = self.run_config_parser(
             "CALENDAR_MODE=offline\n"
