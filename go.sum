@@ -1,3 +1,5 @@
+github.com/6tail/lunar-go v1.4.6 h1:APCXi1PC3Q7gZt6RJyug/ZdZcwX2qOkzIsZIcjCQdHY=
+github.com/6tail/lunar-go v1.4.6/go.mod h1:mMvCby9aWTSmsZjnv+5EOW7taJFV4RsjNcQLRl/3whY=
 github.com/teambition/rrule-go v1.8.2 h1:lIjpjvWTj9fFUZCmuoVDrKVOtdiyzbzc93qTmRVe/J8=
 github.com/teambition/rrule-go v1.8.2/go.mod h1:Ieq5AbrKGciP1V//Wq8ktsTXwSwJHDD5mD/wLBGl3p4=
 golang.org/x/image v0.31.0 h1:mLChjE2MV6g1S7oqbXC0/UcKijjm5fnJLUYKIYrLESA=

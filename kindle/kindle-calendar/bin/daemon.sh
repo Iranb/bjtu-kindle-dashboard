@@ -3,6 +3,7 @@
 . /mnt/us/extensions/kindle-calendar/bin/common.sh
 load_config || exit 2
 UPDATE_PID=""
+HOLIDAY_PID=""
 POWER_PID=""
 NETWORK_PID=""
 TICK_PID=""
@@ -10,11 +11,20 @@ SCHEDULED_WAKE=0
 
 cleanup() {
     trap - INT TERM EXIT
-    for CHILD in "$UPDATE_PID" "$POWER_PID" "$NETWORK_PID" "$TICK_PID"; do
+    for CHILD in "$UPDATE_PID" "$HOLIDAY_PID" "$POWER_PID" "$NETWORK_PID" "$TICK_PID"; do
         [ -n "$CHILD" ] && kill "$CHILD" >/dev/null 2>&1 || true
     done
     rm -f "$FIFO" "$PID_FILE"
     exit 0
+}
+
+start_holiday_refresh() {
+    [ "$CALENDAR_MODE" = offline ] || return
+    [ "$(wifi_state)" = CONNECTED ] || return
+    if [ -n "$HOLIDAY_PID" ] && kill -0 "$HOLIDAY_PID" 2>/dev/null; then return; fi
+    [ -n "$HOLIDAY_PID" ] && wait "$HOLIDAY_PID" 2>/dev/null || true
+    "$EXT_DIR/bin/holiday-refresh.sh" &
+    HOLIDAY_PID=$!
 }
 trap cleanup INT TERM EXIT
 
@@ -29,7 +39,7 @@ start_update() {
     FORCE=$1
     if [ -n "$UPDATE_PID" ] && kill -0 "$UPDATE_PID" 2>/dev/null; then return; fi
     UPDATE_PID=""
-    [ "$(wifi_state)" = CONNECTED ] || return
+    if [ "$CALENDAR_MODE" = ics ] && [ "$(wifi_state)" != CONNECTED ]; then return; fi
     if [ "$FORCE" -ne 1 ]; then
         DUE=$(read_uint "$NEXT_DUE_FILE" 2>/dev/null)
         NOW=$(now_epoch)
@@ -39,13 +49,19 @@ start_update() {
     UPDATE_PID=$!
 }
 
-cancel_active_update() {
+cancel_background_work() {
     if [ -n "$UPDATE_PID" ] && kill -0 "$UPDATE_PID" 2>/dev/null; then
         kill "$UPDATE_PID" >/dev/null 2>&1 || true
         wait "$UPDATE_PID" 2>/dev/null || true
         log "update result=cancelled reason=user_active"
     fi
     UPDATE_PID=""
+    if [ -n "$HOLIDAY_PID" ] && kill -0 "$HOLIDAY_PID" 2>/dev/null; then
+        kill "$HOLIDAY_PID" >/dev/null 2>&1 || true
+        wait "$HOLIDAY_PID" 2>/dev/null || true
+        log "holiday result=cancelled reason=user_active"
+    fi
+    HOLIDAY_PID=""
 }
 
 arm_rtc() {
@@ -79,11 +95,14 @@ TICK_PID=$!
 log "daemon result=started"
 "$EXT_DIR/bin/ensure-screensaver.sh" >/dev/null 2>&1 || true
 start_update 1
+start_holiday_refresh
 while read -r EVENT <&3; do
     case "$EVENT" in
-        *connectionAvailable*) start_update 1 ;;
+        *connectionAvailable*)
+            if [ "$CALENDAR_MODE" = ics ]; then start_update 1; else start_holiday_refresh; fi
+            ;;
         *goingToScreenSaver*) "$EXT_DIR/bin/show.sh" >/dev/null 2>&1 || true; start_update 0 ;;
-        *outOfScreenSaver*|*exitingScreenSaver*) cancel_active_update ;;
+        *outOfScreenSaver*|*exitingScreenSaver*) cancel_background_work ;;
         *wakeupFromSuspend*)
             NOW=$(now_epoch)
             EXPECTED=$(read_uint "$SCHEDULED_FILE" 2>/dev/null)
@@ -94,16 +113,15 @@ while read -r EVENT <&3; do
                 SCHEDULED_WAKE=0
                 rm -f "$SCHEDULED_FILE"
                 if lipc-set-prop -i com.lab126.powerd abortSuspend 1 >/dev/null 2>&1; then
-                    WAITED=0
-                    while [ "$WAITED" -lt "$WIFI_CONNECT_TIMEOUT_SECONDS" ] && [ "$(wifi_state)" != CONNECTED ]; do sleep 1; WAITED=$((WAITED + 1)); done
                     start_update 1
+                    start_holiday_refresh
                 fi
             fi
             ;;
         *readyToSuspend*1*) arm_rtc ;;
         *timerTick*)
             "$EXT_DIR/bin/ensure-screensaver.sh" >/dev/null 2>&1 || true
-            if [ "$(power_state)" = active ]; then start_update 0; else start_update 0; fi
+            start_update 0
             ;;
     esac
 done

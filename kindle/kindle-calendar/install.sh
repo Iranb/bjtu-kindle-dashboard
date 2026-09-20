@@ -18,13 +18,14 @@ case "$ACTION" in
             echo "install a compatible custom-screensaver/FBInk runtime first" >&2
             exit 1
         fi
-        mkdir -p "$STATE_DIR" /mnt/us/screensavers
+        mkdir -p "$STATE_DIR/holidays" /mnt/us/screensavers
         chmod 700 "$STATE_DIR"
+        chmod 700 "$STATE_DIR/holidays"
         if [ ! -f "$STATE_DIR/feed.url" ]; then umask 077; : > "$STATE_DIR/feed.url"; fi
         chmod 600 "$STATE_DIR/feed.url"
         [ -f "$EXT_DIR/calendar.conf" ] || cp "$EXT_DIR/calendar.conf.example" "$EXT_DIR/calendar.conf"
         chmod 755 "$EXT_DIR/install.sh" "$EXT_DIR/bin/"*.sh "$EXT_DIR/bin/kindle-calendar"
-        chmod 644 "$EXT_DIR/calendar.conf" "$EXT_DIR/calendar.conf.example" "$EXT_DIR/menu.json" "$EXT_DIR/config.xml"
+        chmod 644 "$EXT_DIR/calendar.conf" "$EXT_DIR/calendar.conf.example" "$EXT_DIR/menu.json" "$EXT_DIR/config.xml" "$EXT_DIR/THIRD_PARTY_NOTICES.md"
         root_rw || exit 1
         cp -f "$EXT_DIR/upstart/kindle-calendar.conf" "$JOB" && chmod 644 "$JOB"
         RC=$?
@@ -33,7 +34,7 @@ case "$ACTION" in
         touch "$EXT_DIR/enabled"
         /sbin/stop kindle-calendar >/dev/null 2>&1 || true
         /sbin/start kindle-calendar
-        echo "installed; configure the private feed before the first refresh" ;;
+        echo "installed; offline calendar is ready" ;;
     uninstall|purge)
         rm -f "$EXT_DIR/enabled"
         /sbin/stop kindle-calendar >/dev/null 2>&1 || true

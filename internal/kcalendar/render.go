@@ -25,6 +25,7 @@ type RenderOptions struct {
 	Now           time.Time
 	Location      *time.Location
 	FontPaths     []string
+	DayInfo       map[string]DayInfo
 }
 
 type fontSet struct {
@@ -261,13 +262,31 @@ func RenderMonth(w io.Writer, events []Event, opts RenderOptions) error {
 			shade = 250
 		}
 		_ = drawText(img, fs, dateX, dateY, 36, fmt.Sprintf("%d", day.Day()), textStyle{size: dateSize, bold: true, shade: shade})
+		info := opts.DayInfo[dayKey(day)]
+		if info.LunarLabel != "" {
+			lunarShade := uint8(95)
+			if !inMonth {
+				lunarShade = 165
+			}
+			_ = drawText(img, fs, x+8, y+31, cellW-58, info.LunarLabel, textStyle{size: float64(opts.Width) * .0145, shade: lunarShade})
+		}
 
 		items := byDay[dayKey(day)]
 		barY := y + 58
 		barH := maxInt(28, cellH/7)
 		maxBars := maxInt(1, (cellH-70)/barH)
+		barOffset := 0
+		if info.HolidayName != "" {
+			barShade, textShade, prefix := uint8(74), uint8(250), "休 "
+			if info.IsWorkday {
+				barShade, textShade, prefix = 218, 32, "班 "
+			}
+			fill(img, image.Rect(x+5, barY, x+cellW-5, barY+barH-3), barShade)
+			_ = drawText(img, fs, x+10, barY+barH-9, cellW-20, prefix+info.HolidayName, textStyle{size: eventSize, bold: true, shade: textShade})
+			barOffset = 1
+		}
 		for j, e := range items {
-			if j >= maxBars {
+			if j+barOffset >= maxBars {
 				break
 			}
 			barShade := uint8(214)
@@ -276,15 +295,20 @@ func RenderMonth(w io.Writer, events []Event, opts RenderOptions) error {
 				barShade = 70
 				textShade = 250
 			}
-			fill(img, image.Rect(x+5, barY+j*barH, x+cellW-5, barY+j*barH+barH-3), barShade)
+			itemY := barY + (j+barOffset)*barH
+			fill(img, image.Rect(x+5, itemY, x+cellW-5, itemY+barH-3), barShade)
 			prefix := ""
 			if !e.AllDay {
 				prefix = e.Start.In(opts.Location).Format("15:04 ")
 			}
-			_ = drawText(img, fs, x+10, barY+j*barH+barH-9, cellW-20, prefix+e.Title, textStyle{size: eventSize, bold: e.AllDay, shade: textShade})
+			_ = drawText(img, fs, x+10, itemY+barH-9, cellW-20, prefix+e.Title, textStyle{size: eventSize, bold: e.AllDay, shade: textShade})
 		}
-		if len(items) > maxBars {
-			_ = drawText(img, fs, x+10, y+cellH-9, cellW-20, fmt.Sprintf("+%d", len(items)-maxBars), textStyle{size: eventSize, bold: true, shade: 80})
+		visibleEvents := maxBars - barOffset
+		if visibleEvents < 0 {
+			visibleEvents = 0
+		}
+		if len(items) > visibleEvents {
+			_ = drawText(img, fs, x+10, y+cellH-9, cellW-20, fmt.Sprintf("+%d", len(items)-visibleEvents), textStyle{size: eventSize, bold: true, shade: 80})
 		}
 	}
 	return png.Encode(w, img)

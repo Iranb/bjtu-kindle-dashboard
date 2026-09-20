@@ -1,51 +1,45 @@
 # Standalone Calendar
 
-这是一套完全在 Kindle 上运行的只读日历锁屏服务。Mac 只参与一次安装；安装后，Kindle
-直接通过 HTTPS 下载 ICS、解析日程与重复规则、生成 8 位灰度 PNG，并在锁屏时显示。
+这是一套完全在 Kindle 上运行的离线优先日历锁屏。Mac 只参与一次安装；安装后，Kindle
+根据本机时钟计算公历、星期、农历和二十四节气，在本机生成 8 位灰度 PNG。
 
 ## 前提
 
 - Kindle 已越狱并可通过 SSH 登录；
-- 已安装 KUAL（管理按钮）和可用的 FBInk/自定义屏保运行时；
-- Kindle 已连接可访问日历源的 Wi-Fi；
-- 若使用 Apple 日历，需要单独开启某个 iCloud 日历的“公共日历”并复制链接。
+- 已安装 KUAL 和兼容的 Custom Screensaver/FBInk 运行时；
+- 首次安装时确认真实 framebuffer 尺寸。
 
-“公共日历”是只读，但链接本身就是访问凭据。不要把链接放进 `calendar.conf`、Git、命令行
-参数或日志。安装器通过 SSH stdin 把它写入 Kindle 的：
-
-```text
-/var/local/kindle-calendar/feed.url   mode 0600
-```
+基础日历不需要 Wi-Fi、iCloud、Mac、服务器或个人订阅。程序内置当前年度中国法定
+节假日快照；Wi-Fi 可用时，Kindle 自己每周尝试从 `holiday-cn` 的公开 HTTPS 数据更新
+当前年和下一年。网络失败只会保留旧数据，不会阻止每日翻页。
 
 ## 行为
 
-- 启动、Wi-Fi `connectionAvailable` 事件和每 30 秒健康检查都会判断是否到期；
-- 默认每 15 分钟检查一次，使用 ETag 与 Last-Modified；
-- 电池供电进入深度睡眠前会设置 RTC，默认每小时唤醒一次；
-- RTC 唤醒后用 `abortSuspend` 留出联网窗口，不模拟电源键；
-- 用户解锁会取消仍在运行的下载/渲染任务；
-- HTTPS、ICS 结构或渲染失败时，保留上一张成功图片；
-- ICS 缓存、HTTP 校验值和订阅地址都只保存在 root 私有目录；
-- 日志不包含订阅 URL，也不记录日程标题。
+- 启动时立即生成一次月历；
+- 默认每天 `00:05` 通过 RTC 唤醒并重绘今日标记；
+- 公历、农历、节气均为设备内算法，不等待网络；
+- 联网时最多每七天检查一次法定节假日数据；
+- 节假日 JSON 必须通过年份、日期、数量、重复项和文本范围校验；
+- 所有 PNG 和节假日缓存都通过同目录临时文件、`fsync` 和原子 rename 更新；
+- 用户解锁会取消仍在运行的任务；低于 20% 电量时不安排新的 RTC；
+- 不模拟电源键，也不要求 Wi-Fi 在深度睡眠期间保持连接。
 
-默认画布为 1072×1448、时区为 `Asia/Shanghai`。不同型号应在安装前根据实际 framebuffer
-尺寸修改 `calendar.conf`；该文件是严格白名单解析的数据文件，不会被 root shell source。
+默认画布为 1072×1448、时区为 `Asia/Shanghai`。非 PW3 设备应按实际 framebuffer 修改
+`calendar.conf`。该文件由 root 进程按严格白名单解析，不会被 shell source 或 eval。
+
+`CALENDAR_MODE=ics` 仅作为以后需要个人订阅时的兼容模式；默认且推荐值为 `offline`。
 
 ## KUAL
 
-KUAL → `Standalone Calendar` 提供刷新、显示、启停、状态和匿名日志按钮。订阅地址不允许
-通过 KUAL 或 USB 可见配置修改。
+KUAL → `Offline Calendar` 提供立即刷新、显示、自动更新启停、状态和匿名日志按钮。
 
 ## 一次性部署
 
-在 Mac 创建一个权限为 0600、只含一行 iCloud `webcal://` 或 `https://` 链接的临时文件，
-然后运行：
-
 ```bash
-python3 scripts/deploy_standalone_calendar.py KINDLE_SSH_ALIAS \
-  --feed-url-file /path/to/private-feed-url.txt
+python3 scripts/deploy_standalone_calendar.py KINDLE_SSH_ALIAS
 ```
 
-部署器先通过 SSH 读取设备 CPU 架构，再静态交叉编译对应的 Linux 二进制。订阅地址只经
-SSH stdin 传输；完成后应删除 Mac 上的临时文件。
+部署器通过 SSH 识别设备 CPU 架构，并静态交叉编译 ARMv7 或 ARM64 Linux 二进制。完成后
+Mac 不再参与日历更新。
 
+第三方算法和数据的许可信息见 `THIRD_PARTY_NOTICES.md`。

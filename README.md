@@ -132,15 +132,11 @@ Bearer value stored only in private runtime files. On Kindle, the
 ### Standalone Kindle calendar (no resident Mac)
 
 For a second, jailbroken Kindle, the repository also includes a fully
-device-side mode. The Kindle fetches a private read-only ICS feed over HTTPS,
-expands recurring events, and renders the six-week grayscale month view locally.
-It refreshes when Wi-Fi becomes available and can use an RTC network window
-while otherwise sleeping. A computer is needed only for the one-time install.
-
-This mode cannot query the private macOS EventKit database. For iCloud, create a
-separate calendar containing only lock-screen-safe events and enable its public,
-read-only subscription link. Treat that link as a password: the installer sends
-it over SSH stdin and stores it only in the Kindle's root-private state.
+device-side mode. Gregorian dates, weekdays, Chinese lunar dates, and solar
+terms are computed offline. A bundled Chinese statutory-holiday snapshot is
+used immediately; when Wi-Fi is available, the Kindle performs a best-effort
+weekly refresh of the public holiday JSON itself. The calendar redraws daily
+through RTC even without a network. A computer is needed only for installation.
 
 See the [standalone calendar guide](docs/standalone-kindle-calendar.zh-CN.md).
 

@@ -20,7 +20,9 @@ is_uint() {
 }
 
 in_range() {
-    is_uint "$1" && [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] 2>/dev/null && [ "$1" -le "$3" ] 2>/dev/null
+    is_uint "$1" || return 1
+    case "$1" in 0|[1-9]|[1-9][0-9]*) ;; *) return 1 ;; esac
+    [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] 2>/dev/null && [ "$1" -le "$3" ] 2>/dev/null
 }
 
 config_error() {
@@ -29,8 +31,11 @@ config_error() {
 }
 
 load_config() {
-    SYNC_INTERVAL_SECONDS=900
-    BATTERY_RTC_INTERVAL_SECONDS=3600
+    CALENDAR_MODE=offline
+    DAILY_REFRESH_HOUR=0
+    DAILY_REFRESH_MINUTE=5
+    HOLIDAY_REFRESH_SECONDS=604800
+    BATTERY_RTC_INTERVAL_SECONDS=86400
     LOW_BATTERY_PERCENT=20
     WIFI_CONNECT_TIMEOUT_SECONDS=45
     UPDATE_TIMEOUT_SECONDS=40
@@ -54,9 +59,17 @@ load_config() {
         SEEN="$SEEN $KEY"
         case "$VALUE" in *[!A-Za-z0-9_./+-]*) config_error "$LINE_NUMBER" "unsupported value"; return 1 ;; esac
         case "$KEY" in
-            SYNC_INTERVAL_SECONDS)
-                in_range "$VALUE" 300 86400 || { config_error "$LINE_NUMBER" "$KEY must be 300..86400"; return 1; }
-                SYNC_INTERVAL_SECONDS=$VALUE ;;
+            CALENDAR_MODE)
+                case "$VALUE" in offline|ics) CALENDAR_MODE=$VALUE ;; *) config_error "$LINE_NUMBER" "$KEY must be offline or ics"; return 1 ;; esac ;;
+            DAILY_REFRESH_HOUR)
+                in_range "$VALUE" 0 23 || { config_error "$LINE_NUMBER" "$KEY must be 0..23"; return 1; }
+                DAILY_REFRESH_HOUR=$VALUE ;;
+            DAILY_REFRESH_MINUTE)
+                in_range "$VALUE" 0 59 || { config_error "$LINE_NUMBER" "$KEY must be 0..59"; return 1; }
+                DAILY_REFRESH_MINUTE=$VALUE ;;
+            HOLIDAY_REFRESH_SECONDS)
+                in_range "$VALUE" 86400 2592000 || { config_error "$LINE_NUMBER" "$KEY must be 86400..2592000"; return 1; }
+                HOLIDAY_REFRESH_SECONDS=$VALUE ;;
             BATTERY_RTC_INTERVAL_SECONDS)
                 in_range "$VALUE" 900 604800 || { config_error "$LINE_NUMBER" "$KEY must be 900..604800"; return 1; }
                 BATTERY_RTC_INTERVAL_SECONDS=$VALUE ;;

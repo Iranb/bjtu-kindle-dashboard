@@ -1,7 +1,7 @@
 {
   "items": [
     {
-      "name": "Standalone Calendar",
+      "name": "Offline Calendar",
       "priority": 72,
       "items": [
         { "name": "Refresh calendar now", "action": "bin/control.sh refresh" },

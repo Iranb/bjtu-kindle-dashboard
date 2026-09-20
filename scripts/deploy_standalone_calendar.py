@@ -110,7 +110,7 @@ def main() -> int:
     parser.add_argument(
         "--feed-url-file",
         type=Path,
-        help="local 0600 file containing one private iCloud ICS URL",
+        help="optional local 0600 private ICS URL file for compatibility mode",
     )
     parser.add_argument("--copy-only", action="store_true")
     args = parser.parse_args()
@@ -121,10 +121,9 @@ def main() -> int:
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print("deployment complete; the Kindle now performs calendar sync locally")
+    print("deployment complete; the Kindle now renders the calendar locally")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
