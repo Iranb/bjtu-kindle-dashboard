@@ -129,6 +129,21 @@ Bearer value stored only in private runtime files. On Kindle, the
 `Show Apple Calendar`, and `Show HPC dashboard`. See the
 [Apple Calendar lock-screen guide](docs/apple-calendar-lockscreen.zh-CN.md).
 
+### Standalone Kindle calendar (no resident Mac)
+
+For a second, jailbroken Kindle, the repository also includes a fully
+device-side mode. The Kindle fetches a private read-only ICS feed over HTTPS,
+expands recurring events, and renders the six-week grayscale month view locally.
+It refreshes when Wi-Fi becomes available and can use an RTC network window
+while otherwise sleeping. A computer is needed only for the one-time install.
+
+This mode cannot query the private macOS EventKit database. For iCloud, create a
+separate calendar containing only lock-screen-safe events and enable its public,
+read-only subscription link. Treat that link as a password: the installer sends
+it over SSH stdin and stores it only in the Kindle's root-private state.
+
+See the [standalone calendar guide](docs/standalone-kindle-calendar.zh-CN.md).
+
 ## Deploy to Kindle
 
 With an SSH alias such as `kindle` already configured:
@@ -202,6 +217,7 @@ normal suspend to resume. RTC tests always require the user to lock the device.
 - [RTC wake and background Wi-Fi validation (简体中文)](docs/rtc-wifi-validation.zh-CN.md)
 - [Local HPC Widget to Kindle sync (简体中文)](docs/hpc-widget-sync.zh-CN.md)
 - [Apple Calendar lock-screen integration (简体中文)](docs/apple-calendar-lockscreen.zh-CN.md)
+- [Standalone Kindle calendar without a resident Mac (简体中文)](docs/standalone-kindle-calendar.zh-CN.md)
 - [Clockwise 90° lock-screen layout (简体中文)](docs/rotation-layout.zh-CN.md)
 
 All guides use placeholders for network addresses, local usernames and key
